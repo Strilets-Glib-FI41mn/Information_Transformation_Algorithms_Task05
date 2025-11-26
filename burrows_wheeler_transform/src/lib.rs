@@ -1,5 +1,3 @@
-use std::fmt::Debug;
-
 use counting_sort::{CountingSort, TryIntoIndex};
 pub fn add(left: u64, right: u64) -> u64 {
     left + right
@@ -8,7 +6,6 @@ pub fn add(left: u64, right: u64) -> u64 {
 pub fn create_all_rotations<T: Clone>(input: &[T]) -> Vec<(Vec<&T>, bool)>{
     let lenth = input.len();
     let ps_sl: Vec<_> = input.iter().collect();
-    // let ps_sl = input.clone();
     let table = (0..lenth).into_iter().map(|
         i| {
             let mut c = ps_sl.clone();
@@ -18,16 +15,12 @@ pub fn create_all_rotations<T: Clone>(input: &[T]) -> Vec<(Vec<&T>, bool)>{
     table
 }
 pub fn bwt_encode<T>(input: &[T]) -> (Vec<T>, usize)
-// where [T; N]: rdxsort::RdxSortTemplate,
 where T: Clone + PartialEq + Ord
-// for<'a> Vec<Vec<&'a T>>: rdxsort::RdxSort
 {
 
     let lenth = input.len();
     let mut table = create_all_rotations(input);
     table.sort();
-    // table.sort_by(|(a, _), (b, _)| a.cmp(&b));
-    // table.rdxsort();
     println!("sorted ok");
     let o = table.iter().position(|(_, b)| *b).unwrap();
     let result:  Vec<_> =table.iter().map(|t| {
@@ -72,11 +65,9 @@ impl<T: TryIntoIndex + Copy + Clone + Ord> Ord for Pair<T>{
 
 
 pub fn bwt_decode<T>(code: Vec<T>, no: usize) -> Vec<T>
-where Pair<T>: Clone + PartialEq + Ord + counting_sort::TryIntoIndex + Copy, // + TryInto<usize, Error: Debug>,
+where Pair<T>: Clone + PartialEq + Ord + counting_sort::TryIntoIndex + Copy,
 T: Clone + PartialEq + Ord + counting_sort::TryIntoIndex +  Copy, 
-for<'b> &'b T: Clone + PartialEq + Ord  +  Copy, // counting_sort::TryIntoIndex + 
-// for<'a> &'a mut std::slice::Iter<'a, Pair<T>>: Iterator<Item = &'a Pair<T>>,
-// for<'c> &'c std::slice::Iter<'c, Pair<T>>: Iterator<Item = &'c Pair<T>> + CountingSort<'c, Pair<T>>
+for<'b> &'b T: Clone + PartialEq + Ord  +  Copy,
 {
     let mut res = vec![None; code.len()];
     let tv = code.to_vec();
