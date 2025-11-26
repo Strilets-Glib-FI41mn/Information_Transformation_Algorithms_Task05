@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+counting_sort = "1.0.10"
 # rdx = "0.0.7"
 # rdxsort = "0.3.0"
 # rdxsort = {git = "https://github.com/Luro02/rdxsort-rs", rev = "72ea4ce0f0ca201a74ea283e30f5f0d9f2da8824"}

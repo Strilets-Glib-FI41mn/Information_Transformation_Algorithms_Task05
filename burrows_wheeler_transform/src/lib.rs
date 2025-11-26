@@ -1,3 +1,6 @@
+use std::fmt::Debug;
+
+use counting_sort::CountingSort;
 pub fn add(left: u64, right: u64) -> u64 {
     left + right
 }
@@ -19,6 +22,7 @@ pub fn bwt_encode<T>(input: &[T]) -> (Vec<T>, usize)
 where T: Clone + PartialEq + Ord
 // for<'a> Vec<Vec<&'a T>>: rdxsort::RdxSort
 {
+
     let lenth = input.len();
     let mut table = create_all_rotations(input);
     table.sort();
@@ -30,6 +34,25 @@ where T: Clone + PartialEq + Ord
         t.0[lenth - 1].clone()
     }).collect();
     (result, o)
+}
+
+
+pub fn bwt_decode<'a, T>(code: &[T], no: usize) -> Vec<T>
+where T: Clone + PartialEq + Ord + Default + counting_sort::TryIntoIndex + 'a + Copy + TryInto<usize, Error: Debug>,
+&'a mut std::slice::Iter<'a, T>: Clone + Sized +  Iterator<Item = &'a T>,
+&'a std::slice::Iter<'a, T>: Iterator<Item = &'a T> + CountingSort<'a, T>
+{
+    let mut res = vec![T::default(); code.len()];
+    let sorted = code.to_vec().iter()
+    .cnt_sort().unwrap();
+    
+    let mut pos = no;
+    (0..code.len()).for_each(|i|{
+        pos = sorted[pos].try_into().unwrap();
+        res[i] = code[pos];
+        }
+    );
+    res
 }
 
 
@@ -47,25 +70,21 @@ mod tests {
         assert_eq!(b[0].0, [&1, &3, &4, &2])
     }
     #[test]
-    fn sorted_test(){
+    fn sorted_text(){
         let thing: Vec<_> = "ананас".chars().collect();
-        // let thing = ['а', 'н', 'а', 'н', 'а', 'с'];
-        // let thing = [99u8, 2, 5, 7, 14];
-        // println!("{thing:?}");
         let res = bwt_encode(&thing);
         println!("res: {res:?}");
         let expected_: Vec<_> = "сннааа".chars().collect();
         assert_eq!((expected_, 0usize), res);
+        let decoded = bwt_decode(res.0, res.1);
+        assert_eq!(thing, decoded);
     }
     #[test]
     fn sorted_u8(){
-        // let thing: &[char] = "ананас".into();
-        // let thing = ['а', 'н', 'а', 'н', 'а', 'с'];
         let thing = [99u8, 2, 5, 7, 14];
         println!("{:?}", create_all_rotations(&thing));
         let res = bwt_encode(&thing);
         println!("res: {res:?}");
-        // let expected_: Vec<_> = "сннааа".chars().collect();
         let expected_ = vec![99, 2, 5, 7, 14];
         assert_eq!((expected_, 4usize), res);
     }
