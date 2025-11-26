@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use counting_sort::CountingSort;
+use counting_sort::{CountingSort, TryIntoIndex};
 pub fn add(left: u64, right: u64) -> u64 {
     left + right
 }
@@ -36,25 +36,62 @@ where T: Clone + PartialEq + Ord
     (result, o)
 }
 
+#[derive(Clone, Copy)]
+pub struct Pair<T: TryIntoIndex + Copy + Clone>(T, usize);
+impl<T: TryIntoIndex + Copy + Clone> TryIntoIndex for Pair<T>{
+    type Error = <T as TryIntoIndex>::Error;
 
-pub fn bwt_decode<'a, T>(code: &[T], no: usize) -> Vec<T>
-where T: Clone + PartialEq + Ord + Default + counting_sort::TryIntoIndex + 'a + Copy + TryInto<usize, Error: Debug>,
-&'a mut std::slice::Iter<'a, T>: Clone + Sized +  Iterator<Item = &'a T>,
-&'a std::slice::Iter<'a, T>: Iterator<Item = &'a T> + CountingSort<'a, T>
-{
-    let mut res = vec![T::default(); code.len()];
-    let sorted = code.to_vec().iter()
-    .cnt_sort().unwrap();
-    
-    let mut pos = no;
-    (0..code.len()).for_each(|i|{
-        pos = sorted[pos].try_into().unwrap();
-        res[i] = code[pos];
+    fn try_into_index(value: &Self, min_value: &Self) -> Result<usize, Self::Error> {
+        T::try_into_index(&value.0, &min_value.0)
+    }
+}
+impl<T: TryIntoIndex + PartialOrd + std::marker::Copy> PartialOrd for Pair<T>{
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match self.0.partial_cmp(&other.0) {
+            Some(order) => {
+                Some(order)
+            }
+            ord => return ord,
         }
-    );
-    res
+    }
 }
 
+impl<T: TryIntoIndex + std::marker::Copy + PartialEq> PartialEq for Pair<T>{
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+impl<T: TryIntoIndex + PartialOrd + std::marker::Copy> Eq for Pair<T>{
+
+}
+impl<T: TryIntoIndex + Copy + Clone + Ord> Ord for Pair<T>{
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.0.cmp(&other.0)
+    }
+}
+
+
+pub fn bwt_decode<T>(code: Vec<T>, no: usize) -> Vec<T>
+where Pair<T>: Clone + PartialEq + Ord + counting_sort::TryIntoIndex + Copy, // + TryInto<usize, Error: Debug>,
+T: Clone + PartialEq + Ord + counting_sort::TryIntoIndex +  Copy, 
+for<'b> &'b T: Clone + PartialEq + Ord  +  Copy, // counting_sort::TryIntoIndex + 
+// for<'a> &'a mut std::slice::Iter<'a, Pair<T>>: Iterator<Item = &'a Pair<T>>,
+// for<'c> &'c std::slice::Iter<'c, Pair<T>>: Iterator<Item = &'c Pair<T>> + CountingSort<'c, Pair<T>>
+{
+    let mut res = vec![None; code.len()];
+    let tv = code.to_vec();
+    let sorted = tv.iter().enumerate()
+    .map(|(u, t)|{Pair(t.clone(), u)}).collect::<Vec<_>>().iter()
+    .cnt_sort().unwrap();
+    let mut pos = no;
+    (0..code.len()).for_each(|i|{
+        pos = sorted[pos].1;
+        res[i] = Some(code[pos]);
+        }
+    );
+    drop(sorted);
+    res.iter().map(|o| o.unwrap()).collect()
+}
 
 
 
@@ -71,12 +108,14 @@ mod tests {
     }
     #[test]
     fn sorted_text(){
-        let thing: Vec<_> = "ананас".chars().collect();
+        let thing: Vec<_> = "ананас".chars().map(|ch| ch as u32).collect();
         let res = bwt_encode(&thing);
-        println!("res: {res:?}");
+        let comp = (res.0.iter().map(|u|  char::from_u32(*u).unwrap()).collect() ,res.1);
+        println!("res: {comp:?}");
         let expected_: Vec<_> = "сннааа".chars().collect();
-        assert_eq!((expected_, 0usize), res);
+        assert_eq!((expected_, 0usize), comp);
         let decoded = bwt_decode(res.0, res.1);
+        let comp_decoded:Vec<_> = decoded.iter().map(|u|  char::from_u32(*u).unwrap()).collect();
         assert_eq!(thing, decoded);
     }
     #[test]
