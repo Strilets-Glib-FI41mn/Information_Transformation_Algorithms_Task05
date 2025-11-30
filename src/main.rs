@@ -2,25 +2,64 @@ use std::{collections::LinkedList, fs::File, io::{Read, Write}, path::PathBuf};
 use dialoguer::{Confirm, Editor};
 use move_to_front::{move_to_front, move_to_front_decode};
 use burrows_wheeler_transform;
-use clap::{Error, Parser, arg};
+use clap::{Parser, arg};
 use serde::Serialize;
-use zwl_gs::like_u12::LikeU12;
+use rayon::prelude::*;
 
 fn main() -> std::io::Result<()> {
-    let mut config = Cli::parse();
-    let mut ver = 0;
+    let mut config = Config::parse();
+    // encode_or_decode(&mut config)?;
+    if config.input_file.is_file() {
+        let output_path = match find_output_path(&config){
+            Some(output) => output,
+            None => {
+                println!("No name for the output file found! Exiting");
+                return Ok(());
+            },
+        };
+        config.output_file = Some(output_path);
+        encode_or_decode(&mut config)?;
+    }
+    else if let Some(out) = &config.output_file && out.is_dir() && config.input_file.is_dir(){
+        let files = std::fs::read_dir(&config.input_file).unwrap().collect::<Vec<_>>();
+        let mut results: Vec<_> = (&files).into_par_iter().filter(|r| r.is_ok())
+        .map(|file_path|{
+            let mut new_config = config.clone();
+            let mut new_pb = out.clone();
+            new_pb.as_mut_os_string().push("/");
+            new_pb.push(file_path.as_ref().unwrap().file_name());
+            // println!("targeted path: {new_pb:?}");
+            new_config.input_file = file_path.as_ref().unwrap().path();
+            new_config.output_file = Some(new_pb);
+            new_config
+        }).filter(|new_config|{
+            new_config.input_file.is_file() && !new_config.input_file.ends_with(".DS_Store")
+        }).map(|mut new_config|{
+            (encode_or_decode(&mut new_config), new_config.input_file.clone(), new_config.output_file.clone().unwrap())
+        })
+        .filter(|r| r.0.is_err())
+        .collect();
 
-    #[cfg(debug_assertions)]
-    println!("{:?}", config);
+        // results.iter().for_each(|a|{
+        //     println!("error: {:?}, input path: {:?}, output_path: {:?}", &a.0, &a.1, &a.2)
+        // });
+
+        if !results.is_empty(){
+            return results.pop().unwrap().0;
+        }
+    }
+    
+    Ok(())
+}
+pub fn find_output_path(config: &Config) -> Option<PathBuf>{
     let input_path = config.input_file.clone();
-
-    let output_path = match config.output_file{
+    let output_path = match &config.output_file{
         Some(output) =>{
             output
         }
         None =>{
             let mut out = input_path.clone();
-            match config.mode{
+            &match config.mode{
                 Mode::Encode => {
                     let mut new_extension = out.extension().map(|e| e.to_os_string()).unwrap_or_default();
                     match config.encoding{
@@ -43,8 +82,7 @@ fn main() -> std::io::Result<()> {
                             println!("{}", rv);
                             out = rv.into();
                         } else {
-                            println!("No name for the output file found! Exiting");
-                            return Ok(());
+                            return None;
                         }
                     }
                     out
@@ -52,7 +90,26 @@ fn main() -> std::io::Result<()> {
             }
         }
     };
-    let mut input = File::open(input_path)?;
+    Some(output_path.clone())
+}
+
+pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
+    let mut ver = 0;
+
+    #[cfg(debug_assertions)]
+    println!("{:?}", config);
+    let input_path = config.input_file.clone();
+
+    let output_path = match find_output_path(&config){
+        Some(output) => output,
+        None => {
+            println!("No name for the output file found! Exiting");
+            return Ok(());
+        },
+    };
+    println!("Input file: {input_path:?}, output file: {output_path:?}");
+    let mut input = File::open(&input_path)?;
+    let mut output = File::create(output_path)?;
     let mut header = vec![ver];
     match config.mode{
         Mode::Encode => {
@@ -69,6 +126,8 @@ fn main() -> std::io::Result<()> {
         Mode::Decode => {
             let mut version = [0];
             input.read_exact(&mut version)?;
+            // let read_v = input.read(&mut version)?;
+            // println!("read_v: {read_v}");
             if version[0] != 0{
                 panic!("Version {} is unsuported", version[0]);
             }
@@ -102,10 +161,11 @@ fn main() -> std::io::Result<()> {
     }
     match config.mode{
         Mode::Encode => {
+            output.write_all(&header)?;
             let mut working_space = vec![];
             let mut input_buffer = vec![];
-            input.read_to_end(&mut input_buffer)?;
-            let mut output = File::open(output_path)?;
+            let read = input.read_to_end(&mut input_buffer)?;
+            println!("read: {read}");
             match config.bwt{
                 true => {
                     let mut res = burrows_wheeler_transform::bwt_encode(&input_buffer);
@@ -116,7 +176,7 @@ fn main() -> std::io::Result<()> {
                     working_space.append(&mut input_buffer);
                 },
             }
-
+            // println!("size of space: {}", working_space.len());
             if config.mtf{
                 let alph = (0..=u8::MAX).map(|byte| byte).collect::<Vec<u8>>();
                 let mut alphabet = LinkedList::new();
@@ -126,21 +186,22 @@ fn main() -> std::io::Result<()> {
                 output.write(&start_alphabet)?;
                 working_space = a.into_iter().map(|u| u as u8).collect();
             }
+            // println!("size of space: {}", working_space.len());
             match config.encoding{
                 Encoding::ZWLU12 => {
-                    let mut encoder = zwl_gs::bit_encoder::ZwlBitEncoder::<zwl_gs::like_u12::LikeU12, _>::new(working_space.as_slice(), config.filled_behaviour.into());
+                    let mut encoder = zwl_gs::bit_encoder::ZwlBitEncoder::<zwl_gs::like_u12::LikeU12, _>::new(working_space.as_slice(), config.filled_behaviour.clone().into());
                     encoder.encode(output)?;
                 },
                 Encoding::ZWLU16 => {
-                    let mut encoder =  zwl_gs::bit_encoder::ZwlBitEncoder::<zwl_gs::like_u16::LikeU16, _>::new(working_space.as_slice(), config.filled_behaviour.into());
+                    let mut encoder =  zwl_gs::bit_encoder::ZwlBitEncoder::<zwl_gs::like_u16::LikeU16, _>::new(working_space.as_slice(), config.filled_behaviour.clone().into());
                     encoder.encode(output)?;
                 },
                 Encoding::ZWLU32 => {
-                    let mut encoder = zwl_gs::bit_encoder::ZwlBitEncoder::<zwl_gs::like_u32::LikeU32, _>::new(working_space.as_slice(), config.filled_behaviour.into());
+                    let mut encoder = zwl_gs::bit_encoder::ZwlBitEncoder::<zwl_gs::like_u32::LikeU32, _>::new(working_space.as_slice(), config.filled_behaviour.clone().into());
                     encoder.encode(output)?;
                 },
                 Encoding::ZWLU64 => {
-                    let mut encoder = zwl_gs::bit_encoder::ZwlBitEncoder::<zwl_gs::like_u64::LikeU64, _>::new(working_space.as_slice(), config.filled_behaviour.into());
+                    let mut encoder = zwl_gs::bit_encoder::ZwlBitEncoder::<zwl_gs::like_u64::LikeU64, _>::new(working_space.as_slice(), config.filled_behaviour.clone().into());
                     encoder.encode(output)?;
                 },
                 Encoding::Huffman => {
@@ -164,19 +225,19 @@ fn main() -> std::io::Result<()> {
 
             match config.encoding{
                 Encoding::ZWLU12 => {
-                    let mut decoder = zwl_gs::bit_decoder::ZwlBitDecoder::<zwl_gs::like_u12::LikeU12, _>::new(input_buffer.as_slice(), config.filled_behaviour.into());
+                    let mut decoder = zwl_gs::bit_decoder::ZwlBitDecoder::<zwl_gs::like_u12::LikeU12, _>::new(input_buffer.as_slice(), config.filled_behaviour.clone().into());
                     decoder.decode(&mut working_space)?;
                 },
                 Encoding::ZWLU16 => {
-                    let mut decoder = zwl_gs::bit_decoder::ZwlBitDecoder::<zwl_gs::like_u16::LikeU16, _>::new(input_buffer.as_slice(), config.filled_behaviour.into());
+                    let mut decoder = zwl_gs::bit_decoder::ZwlBitDecoder::<zwl_gs::like_u16::LikeU16, _>::new(input_buffer.as_slice(), config.filled_behaviour.clone().into());
                     decoder.decode(&mut working_space)?;
                 },
                 Encoding::ZWLU32 => {
-                    let mut decoder = zwl_gs::bit_decoder::ZwlBitDecoder::<zwl_gs::like_u32::LikeU32, _>::new(input_buffer.as_slice(), config.filled_behaviour.into());
+                    let mut decoder = zwl_gs::bit_decoder::ZwlBitDecoder::<zwl_gs::like_u32::LikeU32, _>::new(input_buffer.as_slice(), config.filled_behaviour.clone().into());
                     decoder.decode(&mut working_space)?;
                 },
                 Encoding::ZWLU64 => {
-                    let mut decoder = zwl_gs::bit_decoder::ZwlBitDecoder::<zwl_gs::like_u64::LikeU64, _>::new(input_buffer.as_slice(), config.filled_behaviour.into());
+                    let mut decoder = zwl_gs::bit_decoder::ZwlBitDecoder::<zwl_gs::like_u64::LikeU64, _>::new(input_buffer.as_slice(), config.filled_behaviour.clone().into());
                     decoder.decode(&mut working_space)?;
                 },
                 Encoding::Huffman => {
@@ -193,14 +254,11 @@ fn main() -> std::io::Result<()> {
             if config.bwt{
                 working_space = burrows_wheeler_transform::bwt_decode(working_space, no[0].into());
             }
-            let mut output = File::open(output_path)?;
             output.write(&working_space)?;
         },
     }
     Ok(())
 }
-
-
 
 #[cfg_attr(debug_assertions, derive(Debug))]
 #[derive(
@@ -275,9 +333,9 @@ impl From<FilledOption> for zwl_gs::dictionary::FilledBehaviour{
 
 
 #[cfg_attr(debug_assertions, derive(Debug))]
-#[derive(Parser)]
+#[derive(Parser, Clone)]
 #[command(version, about)]
-struct Cli {
+pub struct Config {
     input_file: PathBuf,
     output_file: Option<PathBuf>,
     #[arg(long, short, default_value_t = Mode::Encode, value_enum)]
@@ -296,5 +354,4 @@ struct Cli {
 
     #[arg(long, short, default_value_t = false)]
     overwrite: bool,
-
 }
