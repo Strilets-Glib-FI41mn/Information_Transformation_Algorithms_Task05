@@ -33,14 +33,16 @@ where T: Clone + PartialEq + Ord
 
 
 pub fn bwt_decode<T>(code: Vec<T>, no: usize) -> Vec<T>
-where Pair<T>: Clone + PartialEq + Ord + counting_sort::TryIntoIndex + Copy,
+where Pair<T>: Clone + PartialEq + Ord + counting_sort::TryIntoIndex + Copy, //+ std::fmt::Debug,
 T: Clone + PartialEq + Ord + counting_sort::TryIntoIndex +  Copy, 
 for<'b> &'b T: Clone + PartialEq + Ord  +  Copy,
 {
     let mut res = vec![None; code.len()];
     let tv = code.to_vec();
-    let sorted = tv.iter().enumerate()
-    .map(|(u, t)|{Pair(t.clone(), u)}).collect::<Vec<_>>().iter()
+    let pairs = tv.iter().enumerate()
+    .map(|(u, t)|{Pair(t.clone(), u)}).collect::<Vec<_>>();
+    
+    let sorted = pairs.iter()
     .cnt_sort().unwrap();
     let mut pos = no;
     (0..code.len()).for_each(|i|{

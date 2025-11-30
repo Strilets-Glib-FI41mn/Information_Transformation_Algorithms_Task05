@@ -34,12 +34,19 @@ fn main() -> std::io::Result<()> {
             new_pb.push(file_path.as_ref().unwrap().file_name());
             // println!("targeted path: {new_pb:?}");
             new_config.input_file = file_path.as_ref().unwrap().path();
-            let mut new_extension = new_config.input_file.extension().map(|e| e.to_os_string()).unwrap_or_default();
-            match config.encoding{
-                Encoding::Huffman => new_extension.push(".huffman"),
-                Encoding::ZWLU12 | Encoding::ZWLU16 | Encoding::ZWLU32 |Encoding::ZWLU64 => new_extension.push(".zwl")
+            match config.mode{
+                Mode::Encode => {
+                    let mut new_extension = new_config.input_file.extension().map(|e| e.to_os_string()).unwrap_or_default();
+                    match config.encoding{
+                        Encoding::Huffman => new_extension.push(".huffman"),
+                        Encoding::ZWLU12 | Encoding::ZWLU16 | Encoding::ZWLU32 |Encoding::ZWLU64 => new_extension.push(".zwl")
+                    }
+                    new_pb.set_extension(new_extension);
+                },
+                Mode::Decode => {
+                    new_pb.set_extension("");
+                },
             }
-            new_pb.set_extension(new_extension);
             new_config.output_file = Some(new_pb);
             new_config
         }).filter(|new_config|{
@@ -132,6 +139,7 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
                     FilledOption::Freeze => header.push(1),
                 }
             }
+            output.write_all(&header)?;
         },
         Mode::Decode => {
             let mut version = [0];
@@ -171,7 +179,6 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
     }
     match config.mode{
         Mode::Encode => {
-            output.write_all(&header)?;
             let mut working_space = vec![];
             let mut input_buffer = vec![];
             // let read = 
@@ -182,6 +189,7 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
                     let mut buff = [0; 8];
                     let mut cursor = std::io::Cursor::new(&input_buffer);
                     while let Ok(size) = cursor.read(&mut buff) && size > 0{
+                        println!("Size:: {size}");
                         let mut res = burrows_wheeler_transform::bwt_encode(&input_buffer[0..size]);
                         working_space.push(res.1.try_into().unwrap());
                         working_space.append(&mut res.0);
@@ -261,6 +269,7 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
             }
             
             if config.mtf{
+                // println!("MTF!");
                 let mut read_alphabet = LinkedList::from(alph.clone());
                 let the_rest: Vec<_> = working_space.iter().map(|u| *u as usize).collect();
                 let decoded = move_to_front_decode(&mut read_alphabet, &the_rest);
@@ -269,7 +278,8 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
             if config.bwt{
                 let mut buff = [0; 9];
                 let mut cursor = std::io::Cursor::new(&input_buffer);
-                while let Ok(size) = cursor.read(&mut buff) && size > 0{
+                while let Ok(size) = cursor.read(&mut buff) && size > 1{
+                    println!("{size}, {}", input_buffer[1..size].len());
                     let mut res = burrows_wheeler_transform::bwt_decode(input_buffer[1..size].into(), input_buffer[0].into());
                     working_space.append(&mut res);
                 }
