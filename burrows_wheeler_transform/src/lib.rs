@@ -53,7 +53,6 @@ for<'b> &'b T: Clone + PartialEq + Ord  +  Copy,
 }
 
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
