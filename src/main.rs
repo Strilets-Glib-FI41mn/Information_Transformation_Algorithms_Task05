@@ -19,8 +19,12 @@ fn main() -> std::io::Result<()> {
         };
         config.output_file = Some(output_path);
         encode_or_decode(&mut config)?;
+        return Ok(());
     }
-    else if let Some(out) = &config.output_file && out.is_dir() && config.input_file.is_dir(){
+    if let Some(out) = &config.output_file && !out.is_file(){
+        if !out.is_dir(){
+            std::fs::create_dir(out)?;
+        }
         let files = std::fs::read_dir(&config.input_file).unwrap().collect::<Vec<_>>();
         let mut results: Vec<_> = (&files).into_par_iter().filter(|r| r.is_ok())
         .map(|file_path|{
@@ -30,6 +34,12 @@ fn main() -> std::io::Result<()> {
             new_pb.push(file_path.as_ref().unwrap().file_name());
             // println!("targeted path: {new_pb:?}");
             new_config.input_file = file_path.as_ref().unwrap().path();
+            let mut new_extension = new_config.input_file.extension().map(|e| e.to_os_string()).unwrap_or_default();
+            match config.encoding{
+                Encoding::Huffman => new_extension.push(".huffman"),
+                Encoding::ZWLU12 | Encoding::ZWLU16 | Encoding::ZWLU32 |Encoding::ZWLU64 => new_extension.push(".zwl")
+            }
+            new_pb.set_extension(new_extension);
             new_config.output_file = Some(new_pb);
             new_config
         }).filter(|new_config|{
@@ -94,7 +104,7 @@ pub fn find_output_path(config: &Config) -> Option<PathBuf>{
 }
 
 pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
-    let mut ver = 0;
+    let ver = 0;
 
     #[cfg(debug_assertions)]
     println!("{:?}", config);
@@ -107,7 +117,7 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
             return Ok(());
         },
     };
-    println!("Input file: {input_path:?}, output file: {output_path:?}");
+    // println!("Input file: {input_path:?}, output file: {output_path:?}");
     let mut input = File::open(&input_path)?;
     let mut output = File::create(output_path)?;
     let mut header = vec![ver];
@@ -164,13 +174,18 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
             output.write_all(&header)?;
             let mut working_space = vec![];
             let mut input_buffer = vec![];
-            let read = input.read_to_end(&mut input_buffer)?;
-            println!("read: {read}");
+            // let read = 
+            input.read_to_end(&mut input_buffer)?;
+            // println!("read: {read}");
             match config.bwt{
                 true => {
-                    let mut res = burrows_wheeler_transform::bwt_encode(&input_buffer);
-                    output.write(&[res.1.try_into().unwrap()])?;
-                    working_space.append(&mut res.0);
+                    let mut buff = [0; 8];
+                    let mut cursor = std::io::Cursor::new(&input_buffer);
+                    while let Ok(size) = cursor.read(&mut buff) && size > 0{
+                        let mut res = burrows_wheeler_transform::bwt_encode(&input_buffer[0..size]);
+                        working_space.push(res.1.try_into().unwrap());
+                        working_space.append(&mut res.0);
+                    }
                 },
                 false => {
                     working_space.append(&mut input_buffer);
@@ -210,11 +225,11 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
             }
         },
         Mode::Decode => {
-            let mut no = [0];
-            let mut alph = [0; u8::MAX as usize];
-            if config.bwt{
-                input.read_exact(&mut no)?;
-            }
+            // let mut no = [0];
+            let mut alph = [0; u8::MAX as usize + 1];
+            // if config.bwt{
+            //     input.read_exact(&mut no)?;
+            // }
             if config.mtf{
                 input.read_exact(&mut alph)?;
             }
@@ -252,7 +267,12 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
                 working_space = decoded;
             }
             if config.bwt{
-                working_space = burrows_wheeler_transform::bwt_decode(working_space, no[0].into());
+                let mut buff = [0; 9];
+                let mut cursor = std::io::Cursor::new(&input_buffer);
+                while let Ok(size) = cursor.read(&mut buff) && size > 0{
+                    let mut res = burrows_wheeler_transform::bwt_decode(input_buffer[1..size].into(), input_buffer[0].into());
+                    working_space.append(&mut res);
+                }
             }
             output.write(&working_space)?;
         },

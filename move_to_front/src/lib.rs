@@ -19,7 +19,8 @@ where T: Clone, for<'a> &'a T: std::ops::Deref
 {
     let mut output = vec![];
     input.iter().for_each(|u|{
-        let symbol = alphabet.iter().nth(*u).unwrap().clone();
+        let symbol = alphabet.iter().nth(*u)
+        .expect(&format!("Position failed: {u}")).clone();
         let mut second = alphabet.split_off(*u);
         alphabet.push_front(second.pop_back().unwrap());
         alphabet.append(&mut second);

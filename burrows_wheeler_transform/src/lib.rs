@@ -23,7 +23,7 @@ where T: Clone + PartialEq + Ord
     let lenth = input.len();
     let mut table = create_all_rotations(input);
     table.sort();
-    println!("sorted ok");
+    // println!("sorted ok");
     let o = table.iter().position(|(_, b)| *b).unwrap();
     let result:  Vec<_> =table.iter().map(|t| {
         t.0[lenth - 1].clone()
