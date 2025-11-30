@@ -1,6 +1,6 @@
-use std::{collections::LinkedList, fs::File, io::Read, path::PathBuf};
+use std::{collections::LinkedList, fs::File, io::{Read, Write}, path::PathBuf};
 use dialoguer::{Confirm, Editor};
-use move_to_front;
+use move_to_front::{move_to_front, move_to_front_decode};
 use burrows_wheeler_transform;
 use clap::{Error, Parser, arg};
 use serde::Serialize;
@@ -103,63 +103,98 @@ fn main() -> std::io::Result<()> {
     match config.mode{
         Mode::Encode => {
             let mut working_space = vec![];
-
-            let mut buffer = vec![0; 128];
-            while let Ok(size) = input.read(&mut buffer){
-                match config.bwt{
-                    true => {
-                        let mut res = burrows_wheeler_transform::bwt_encode(&buffer[0..size]);
-                        working_space.append(&mut res.0);
-                        working_space.push(res.1 as u8);
-                    },
-                    false => {
-                        if size < 128{
-                            working_space.extend_from_slice(&buffer[0..size]);
-                            continue;
-                        }
-                        working_space.append(&mut buffer);
-                    },
-                }
+            let mut input_buffer = vec![];
+            input.read_to_end(&mut input_buffer)?;
+            let mut output = File::open(output_path)?;
+            match config.bwt{
+                true => {
+                    let mut res = burrows_wheeler_transform::bwt_encode(&input_buffer);
+                    output.write(&[res.1.try_into().unwrap()])?;
+                    working_space.append(&mut res.0);
+                },
+                false => {
+                    working_space.append(&mut input_buffer);
+                },
             }
 
             if config.mtf{
                 let alph = (0..=u8::MAX).map(|byte| byte).collect::<Vec<u8>>();
                 let mut alphabet = LinkedList::new();
                 alphabet.extend(&alph);
-                let a = move_to_front::move_to_front(&mut alphabet, &working_space);
+                let a = move_to_front(&mut alphabet, &working_space);
                 let start_alphabet: Vec<_> = alphabet.into_iter().collect();
-                working_space = start_alphabet;
-                working_space.append(&mut a.into_iter().map(|u| u as u8).collect());
+                output.write(&start_alphabet)?;
+                working_space = a.into_iter().map(|u| u as u8).collect();
             }
             match config.encoding{
                 Encoding::ZWLU12 => {
-                    zwl_gs::bit_encoder::ZwlBitEncoder::<zwl_gs::like_u12::LikeU12, _>::new(working_space.as_slice(), config.filled_behaviour.into());
+                    let mut encoder = zwl_gs::bit_encoder::ZwlBitEncoder::<zwl_gs::like_u12::LikeU12, _>::new(working_space.as_slice(), config.filled_behaviour.into());
+                    encoder.encode(output)?;
                 },
                 Encoding::ZWLU16 => {
-                    zwl_gs::bit_encoder::ZwlBitEncoder::<zwl_gs::like_u16::LikeU16, _>::new(working_space.as_slice(), config.filled_behaviour.into());
+                    let mut encoder =  zwl_gs::bit_encoder::ZwlBitEncoder::<zwl_gs::like_u16::LikeU16, _>::new(working_space.as_slice(), config.filled_behaviour.into());
+                    encoder.encode(output)?;
                 },
                 Encoding::ZWLU32 => {
-                    zwl_gs::bit_encoder::ZwlBitEncoder::<zwl_gs::like_u32::LikeU32, _>::new(working_space.as_slice(), config.filled_behaviour.into());
+                    let mut encoder = zwl_gs::bit_encoder::ZwlBitEncoder::<zwl_gs::like_u32::LikeU32, _>::new(working_space.as_slice(), config.filled_behaviour.into());
+                    encoder.encode(output)?;
                 },
                 Encoding::ZWLU64 => {
-                    zwl_gs::bit_encoder::ZwlBitEncoder::<zwl_gs::like_u64::LikeU64, _>::new(working_space.as_slice(), config.filled_behaviour.into());
+                    let mut encoder = zwl_gs::bit_encoder::ZwlBitEncoder::<zwl_gs::like_u64::LikeU64, _>::new(working_space.as_slice(), config.filled_behaviour.into());
+                    encoder.encode(output)?;
                 },
                 Encoding::Huffman => {
-                    todo!("Huffman encoding not implemented yet");
-                    // huffman_encoding::encoder
+                    huffman_encoding::encoder::encode(working_space.as_slice(), output, true)?;
                 },
             }
         },
         Mode::Decode => {
-             match config.bwt{
-                true => todo!(),
-                false => todo!(),
+            let mut no = [0];
+            let mut alph = [0; u8::MAX as usize];
+            if config.bwt{
+                input.read_exact(&mut no)?;
+            }
+            if config.mtf{
+                input.read_exact(&mut alph)?;
             }
 
-            match config.mtf{
-                true => todo!(),
-                false => todo!(),
+            let mut input_buffer = vec![];
+            input.read_to_end(&mut input_buffer)?;
+            let mut working_space = vec![];
+
+            match config.encoding{
+                Encoding::ZWLU12 => {
+                    let mut decoder = zwl_gs::bit_decoder::ZwlBitDecoder::<zwl_gs::like_u12::LikeU12, _>::new(input_buffer.as_slice(), config.filled_behaviour.into());
+                    decoder.decode(&mut working_space)?;
+                },
+                Encoding::ZWLU16 => {
+                    let mut decoder = zwl_gs::bit_decoder::ZwlBitDecoder::<zwl_gs::like_u16::LikeU16, _>::new(input_buffer.as_slice(), config.filled_behaviour.into());
+                    decoder.decode(&mut working_space)?;
+                },
+                Encoding::ZWLU32 => {
+                    let mut decoder = zwl_gs::bit_decoder::ZwlBitDecoder::<zwl_gs::like_u32::LikeU32, _>::new(input_buffer.as_slice(), config.filled_behaviour.into());
+                    decoder.decode(&mut working_space)?;
+                },
+                Encoding::ZWLU64 => {
+                    let mut decoder = zwl_gs::bit_decoder::ZwlBitDecoder::<zwl_gs::like_u64::LikeU64, _>::new(input_buffer.as_slice(), config.filled_behaviour.into());
+                    decoder.decode(&mut working_space)?;
+                },
+                Encoding::Huffman => {
+                    huffman_encoding::decoder::decode(input_buffer.as_slice(), &mut working_space)?;
+                },
             }
+            
+            if config.mtf{
+                let mut read_alphabet = LinkedList::from(alph.clone());
+                let the_rest: Vec<_> = working_space.iter().map(|u| *u as usize).collect();
+                let decoded = move_to_front_decode(&mut read_alphabet, &the_rest);
+                working_space = decoded;
+            }
+            if config.bwt{
+                working_space = burrows_wheeler_transform::bwt_decode(working_space, no[0].into());
+            }
+            let mut output = File::open(output_path)?;
+            output.write(&working_space)?;
         },
     }
     Ok(())
