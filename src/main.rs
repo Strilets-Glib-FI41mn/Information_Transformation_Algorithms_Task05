@@ -266,7 +266,8 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
                     decoder.decode(&mut working_space)?;
                 },
                 Encoding::Huffman => {
-                    huffman_encoding::decoder::decode_with_padding(input_buffer.as_slice(), &mut working_space)?;
+                    let cursor_writter = std::io::Cursor::new(&mut input_buffer);
+                    huffman_encoding::decoder::decode_with_padding(cursor_writter, &mut working_space)?;
                 },
             }
             
