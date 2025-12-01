@@ -396,9 +396,9 @@ pub struct Config {
 
 
 #[cfg(test)]
-mod tests {
+mod huffman_tests {
     use burrows_wheeler_transform::*;
-    use std::io::Read;
+    use std::{collections::LinkedList, io::Read};
     const PREAMBLE: &str =  "The Project Gutenberg eBook of The Ethics of Aristotle
     
 This ebook is for the use of anyone anywhere in the United States and
@@ -488,6 +488,30 @@ before using this eBook.";
         
         println!("{:?}", str::from_utf8(&decoded));
         assert_eq!(collecting, he_dec);
+        assert_eq!(original_vu8, decoded);
+        Ok(())
+    }
+    #[test]
+    fn mtf_huffman_text_big() -> std::io::Result<()>{
+        let original_vu8 = PREAMBLE.as_bytes();
+        println!("{}", original_vu8.len());
+        let alph = (0..=u8::MAX).map(|byte| byte).collect::<Vec<u8>>();
+        let mut alphabet = LinkedList::new();
+        alphabet.extend(&alph);
+        let collecting:Vec<_> = move_to_front::move_to_front(&mut alphabet, &original_vu8).iter().map(|u| *u as u8).collect();
+
+        let cursor = std::io::Cursor::new(&collecting);
+        let mut he_text = vec![];
+        let mut cursor_writter = std::io::Cursor::new(&mut he_text);
+        huffman_encoding::encoder::encode_with_padding(cursor, &mut cursor_writter)?;
+        let cursor = std::io::Cursor::new(&he_text);
+        let mut he_dec = vec![];
+        huffman_encoding::decoder::decode_with_padding(cursor, &mut he_dec)?;
+        let he_dec: Vec<_> = he_dec.into_iter().map(|u| u as usize).collect();
+        // let mut decoded:Vec<u8> = vec![];
+        let decoded = move_to_front::move_to_front_decode(&mut alphabet, &he_dec);
+        
+        println!("{:?}", str::from_utf8(&decoded));
         assert_eq!(original_vu8, decoded);
         Ok(())
     }
