@@ -186,13 +186,15 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
             // println!("read: {read}");
             match config.bwt{
                 true => {
+                    // println!("SIZE: {}", input_buffer.len());
                     let mut buff = [0; 8];
                     let mut cursor = std::io::Cursor::new(&input_buffer);
                     while let Ok(size) = cursor.read(&mut buff) && size > 0{
-                        println!("Size:: {size}");
-                        let mut res = burrows_wheeler_transform::bwt_encode(&input_buffer[0..size]);
-                        working_space.push(res.1.try_into().unwrap());
-                        working_space.append(&mut res.0);
+                        // println!("Size:: {size}");
+                        let (mut res, n0) = burrows_wheeler_transform::bwt_encode(&buff[0..size]);
+                        println!("no {}", n0);
+                        working_space.push(n0.try_into().unwrap());
+                        working_space.append(&mut res);
                     }
                 },
                 false => {
@@ -277,9 +279,12 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
             }
             if config.bwt{
                 let mut buff = [0; 9];
+                // println!("SIZE: {}", input_buffer.len());
                 let mut cursor = std::io::Cursor::new(&input_buffer);
                 while let Ok(size) = cursor.read(&mut buff) && size > 1{
-                    println!("{size}, {}", input_buffer[1..size].len());
+                    // println!("{size}, {}", input_buffer[1..size].len());
+                    println!("buff {:?}", buff);
+                    println!("no {}, pos1: {}", buff[0], input_buffer[1..size][buff[0] as usize]);
                     let mut res = burrows_wheeler_transform::bwt_decode(input_buffer[1..size].into(), input_buffer[0].into());
                     working_space.append(&mut res);
                 }
@@ -384,4 +389,125 @@ pub struct Config {
 
     #[arg(long, short, default_value_t = false)]
     overwrite: bool,
+}
+
+
+
+
+#[cfg(test)]
+mod tests {
+    use burrows_wheeler_transform::*;
+    use std::io::Read;
+
+
+
+    #[test]
+    fn bwt_huffman_text() -> std::io::Result<()>{
+        let text = "ананас".to_string();
+        let thing = text.as_bytes();
+        let mut cursor = std::io::Cursor::new(&thing);
+        let mut buff_sm = [0; 8];
+        let mut collecting: Vec<u8> = vec![];
+        while let Ok(size) = cursor.read(&mut buff_sm) && size > 0{
+            let (mut res, n0) = bwt_encode(&buff_sm[0..size]);
+            collecting.push(n0.try_into().unwrap());
+            collecting.append(&mut res);
+        }
+        let cursor = std::io::Cursor::new(&collecting);
+        let mut he_text = vec![];
+        huffman_encoding::encoder::encode(cursor, &mut he_text, true)?;
+        let mut out_buff = [0u8; 9];
+        let cursor = std::io::Cursor::new(&he_text);
+        let mut he_dec = vec![];
+        huffman_encoding::decoder::decode(cursor, &mut he_dec)?;
+        assert_eq!(collecting, he_dec[0..he_dec.len() - 3]);
+        let mut cursor = std::io::Cursor::new(&he_dec[0..he_dec.len() - 3]);
+        let mut decoded:Vec<u8> = vec![];
+        while let Ok(size) = cursor.read(&mut out_buff)  && size > 1{
+            let mut res = bwt_decode(out_buff[1..size].into(), out_buff[0].into());
+            decoded.append(&mut res);
+        }
+
+        assert_eq!(decoded, thing);
+        Ok(())
+    }
+
+    #[test]
+    fn bwt_huffman_text_big() -> std::io::Result<()>{
+        let text = "The Project Gutenberg eBook of The Ethics of Aristotle
+    
+This ebook is for the use of anyone anywhere in the United States and
+most other parts of the world at no cost and with almost no restrictions
+whatsoever. You may copy it, give it away or re-use it under the terms
+of the Project Gutenberg License included with this ebook or online
+at www.gutenberg.org. If you are not located in the United States,
+you will have to check the laws of the country where you are located
+before using this eBook.".to_string();
+        let thing = text.as_bytes();
+        let mut cursor = std::io::Cursor::new(&thing);
+        let mut buff_sm = [0; 8];
+        let mut collecting: Vec<u8> = vec![];
+        while let Ok(size) = cursor.read(&mut buff_sm) && size > 0{
+            let (mut res, n0) = bwt_encode(&buff_sm[0..size]);
+            collecting.push(n0.try_into().unwrap());
+            collecting.append(&mut res);
+        }
+        let cursor = std::io::Cursor::new(&collecting);
+        let mut he_text = vec![];
+        huffman_encoding::encoder::encode(cursor, &mut he_text, true)?;
+        let mut out_buff = [0u8; 9];
+        let cursor = std::io::Cursor::new(&he_text);
+        let mut he_dec = vec![];
+        huffman_encoding::decoder::decode(cursor, &mut he_dec)?;
+        let mut cursor = std::io::Cursor::new(&he_dec);
+        let mut decoded:Vec<u8> = vec![];
+        while let Ok(size) = cursor.read(&mut out_buff)  && size > 1{
+            let mut res = bwt_decode(out_buff[1..size].into(), out_buff[0].into());
+            decoded.append(&mut res);
+        }
+        println!("{:?}", str::from_utf8(&decoded));
+        assert_eq!(collecting, he_dec);
+        assert_eq!(decoded, thing);
+        Ok(())
+    }
+
+
+    #[test]
+    fn huffman_text_big() -> std::io::Result<()>{
+        let text = "The Project Gutenberg eBook of The Ethics of Aristotle
+    
+This ebook is for the use of anyone anywhere in the United States and
+most other parts of the world at no cost and with almost no restrictions
+whatsoever. You may copy it, give it away or re-use it under the terms
+of the Project Gutenberg License included with this ebook or online
+at www.gutenberg.org. If you are not located in the United States,
+you will have to check the laws of the country where you are located
+before using this eBook.".to_string();
+        let thing = text.as_bytes();
+        let cursor = std::io::Cursor::new(&thing);
+        let mut he_text = vec![];
+        huffman_encoding::encoder::encode(cursor, &mut he_text, true)?;
+        let cursor = std::io::Cursor::new(&he_text);
+        let mut he_dec = vec![];
+        huffman_encoding::decoder::decode(cursor, &mut he_dec)?;
+        
+        println!("{:?}", str::from_utf8(&he_dec));
+        assert_eq!(he_dec, thing);
+        Ok(())
+    }
+    // #[test]
+    // fn huffman_text_small() -> std::io::Result<()>{
+    //     let text = "Ананас".to_string();
+    //     let thing = text.as_bytes();
+    //     let cursor = std::io::Cursor::new(&thing);
+    //     let mut he_text = vec![];
+    //     huffman_encoding::encoder::encode(cursor, &mut he_text, true)?;
+    //     let cursor = std::io::Cursor::new(&he_text);
+    //     let mut he_dec = vec![];
+    //     huffman_encoding::decoder::decode(cursor, &mut he_dec)?;
+        
+    //     println!("{:?}", str::from_utf8(&he_dec));
+    //     assert_eq!(he_dec, thing);
+    //     Ok(())
+    // }
 }
