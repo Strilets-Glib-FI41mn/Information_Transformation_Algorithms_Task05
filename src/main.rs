@@ -230,7 +230,7 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
                     encoder.encode(output)?;
                 },
                 Encoding::Huffman => {
-                    huffman_encoding::encoder::encode(working_space.as_slice(), output, true)?;
+                    huffman_encoding::encoder::encode_with_padding(working_space.as_slice(), output)?;
                 },
             }
         },
@@ -266,7 +266,7 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
                     decoder.decode(&mut working_space)?;
                 },
                 Encoding::Huffman => {
-                    huffman_encoding::decoder::decode(input_buffer.as_slice(), &mut working_space)?;
+                    huffman_encoding::decoder::decode_with_padding(input_buffer.as_slice(), &mut working_space)?;
                 },
             }
             
@@ -397,15 +397,37 @@ pub struct Config {
 #[cfg(test)]
 mod tests {
     use burrows_wheeler_transform::*;
-    use std::io::Read;
-
-
-
+    use std::io::{Read, Write};
+    #[test]
+    fn huffman_text_big() -> std::io::Result<()>{
+        let text = "The Project Gutenberg eBook of The Ethics of Aristotle
+    
+This ebook is for the use of anyone anywhere in the United States and
+most other parts of the world at no cost and with almost no restrictions
+whatsoever. You may copy it, give it away or re-use it under the terms
+of the Project Gutenberg License included with this ebook or online
+at www.gutenberg.org. If you are not located in the United States,
+you will have to check the laws of the country where you are located
+before using this eBook.".to_string();
+        let original_vu8 = text.as_bytes();
+        let cursor = std::io::Cursor::new(&original_vu8);
+        let mut he_text = vec![];
+        let mut cursor_writter = std::io::Cursor::new(&mut he_text);
+        huffman_encoding::encoder::encode_with_padding(cursor, &mut cursor_writter)?;
+        let cursor = std::io::Cursor::new(&he_text);
+        let mut he_dec = vec![];
+        huffman_encoding::decoder::decode_with_padding(cursor, &mut he_dec)?;
+        
+        println!("{:?}", str::from_utf8(&he_dec));
+        // assert_eq!(str::from_utf8(&he_dec), Ok(&text).map(|x| x.as_str()));
+        assert_eq!(original_vu8, he_dec);
+        Ok(())
+    }
     #[test]
     fn bwt_huffman_text() -> std::io::Result<()>{
         let text = "ананас".to_string();
-        let thing = text.as_bytes();
-        let mut cursor = std::io::Cursor::new(&thing);
+        let original_vu8 = text.as_bytes();
+        let mut cursor = std::io::Cursor::new(&original_vu8);
         let mut buff_sm = [0; 8];
         let mut collecting: Vec<u8> = vec![];
         while let Ok(size) = cursor.read(&mut buff_sm) && size > 0{
@@ -415,20 +437,22 @@ mod tests {
         }
         let cursor = std::io::Cursor::new(&collecting);
         let mut he_text = vec![];
-        huffman_encoding::encoder::encode(cursor, &mut he_text, true)?;
+        let mut cursor_writter = std::io::Cursor::new(&mut he_text);
+        huffman_encoding::encoder::encode_with_padding(cursor, &mut cursor_writter)?;
         let mut out_buff = [0u8; 9];
         let cursor = std::io::Cursor::new(&he_text);
         let mut he_dec = vec![];
-        huffman_encoding::decoder::decode(cursor, &mut he_dec)?;
-        assert_eq!(collecting, he_dec[0..he_dec.len() - 3]);
-        let mut cursor = std::io::Cursor::new(&he_dec[0..he_dec.len() - 3]);
+        huffman_encoding::decoder::decode_with_padding(cursor, &mut he_dec)?;
+        let mut cursor = std::io::Cursor::new(&he_dec);
         let mut decoded:Vec<u8> = vec![];
-        while let Ok(size) = cursor.read(&mut out_buff)  && size > 1{
+        while let Ok(size) = cursor.read(&mut out_buff) && size > 1{
             let mut res = bwt_decode(out_buff[1..size].into(), out_buff[0].into());
             decoded.append(&mut res);
         }
-
-        assert_eq!(decoded, thing);
+        
+        println!("{:?}", str::from_utf8(&decoded));
+        assert_eq!(collecting, he_dec);
+        assert_eq!(original_vu8, decoded);
         Ok(())
     }
 
@@ -443,8 +467,8 @@ of the Project Gutenberg License included with this ebook or online
 at www.gutenberg.org. If you are not located in the United States,
 you will have to check the laws of the country where you are located
 before using this eBook.".to_string();
-        let thing = text.as_bytes();
-        let mut cursor = std::io::Cursor::new(&thing);
+        let original_vu8 = text.as_bytes();
+        let mut cursor = std::io::Cursor::new(&original_vu8);
         let mut buff_sm = [0; 8];
         let mut collecting: Vec<u8> = vec![];
         while let Ok(size) = cursor.read(&mut buff_sm) && size > 0{
@@ -452,62 +476,43 @@ before using this eBook.".to_string();
             collecting.push(n0.try_into().unwrap());
             collecting.append(&mut res);
         }
+
+        if let Ok(size) = cursor.read(&mut buff_sm) && size > 0{
+            let (mut res, n0) = bwt_encode(&buff_sm[0..size]);
+            collecting.push(n0.try_into().unwrap());
+            collecting.append(&mut res);
+            println!("last symbols?");
+        }
         let cursor = std::io::Cursor::new(&collecting);
         let mut he_text = vec![];
-        huffman_encoding::encoder::encode(cursor, &mut he_text, true)?;
-        let mut out_buff = [0u8; 9];
-        let cursor = std::io::Cursor::new(&he_text);
+        let mut cursor_h_enc = std::io::Cursor::new(&mut he_text);
+        huffman_encoding::encoder::encode_with_padding(cursor, &mut cursor_h_enc)?;
+        cursor_h_enc.flush()?;
+        let cursor_he = std::io::Cursor::new(&he_text);
         let mut he_dec = vec![];
-        huffman_encoding::decoder::decode(cursor, &mut he_dec)?;
+        let mut cursor_writer = std::io::Cursor::new(&mut he_dec);
+        huffman_encoding::decoder::decode_with_padding(cursor_he, &mut cursor_writer)?;
+        cursor_writer.flush()?;
+        // assert_eq!(collecting, he_dec);
+
+
+
         let mut cursor = std::io::Cursor::new(&he_dec);
         let mut decoded:Vec<u8> = vec![];
-        while let Ok(size) = cursor.read(&mut out_buff)  && size > 1{
+        let mut out_buff = [0; 9];
+        while let Ok(size) = cursor.read(&mut out_buff) && size > 1{
             let mut res = bwt_decode(out_buff[1..size].into(), out_buff[0].into());
             decoded.append(&mut res);
         }
+        if let Ok(size) = cursor.read(&mut out_buff) && size > 1{
+            let mut res = bwt_decode(out_buff[1..size].into(), out_buff[0].into());
+            decoded.append(&mut res);
+            println!("last symbols dc");
+        }
+        
         println!("{:?}", str::from_utf8(&decoded));
         assert_eq!(collecting, he_dec);
-        assert_eq!(decoded, thing);
+        assert_eq!(original_vu8, decoded);
         Ok(())
     }
-
-
-    #[test]
-    fn huffman_text_big() -> std::io::Result<()>{
-        let text = "The Project Gutenberg eBook of The Ethics of Aristotle
-    
-This ebook is for the use of anyone anywhere in the United States and
-most other parts of the world at no cost and with almost no restrictions
-whatsoever. You may copy it, give it away or re-use it under the terms
-of the Project Gutenberg License included with this ebook or online
-at www.gutenberg.org. If you are not located in the United States,
-you will have to check the laws of the country where you are located
-before using this eBook.".to_string();
-        let thing = text.as_bytes();
-        let cursor = std::io::Cursor::new(&thing);
-        let mut he_text = vec![];
-        huffman_encoding::encoder::encode(cursor, &mut he_text, true)?;
-        let cursor = std::io::Cursor::new(&he_text);
-        let mut he_dec = vec![];
-        huffman_encoding::decoder::decode(cursor, &mut he_dec)?;
-        
-        println!("{:?}", str::from_utf8(&he_dec));
-        assert_eq!(he_dec, thing);
-        Ok(())
-    }
-    // #[test]
-    // fn huffman_text_small() -> std::io::Result<()>{
-    //     let text = "Ананас".to_string();
-    //     let thing = text.as_bytes();
-    //     let cursor = std::io::Cursor::new(&thing);
-    //     let mut he_text = vec![];
-    //     huffman_encoding::encoder::encode(cursor, &mut he_text, true)?;
-    //     let cursor = std::io::Cursor::new(&he_text);
-    //     let mut he_dec = vec![];
-    //     huffman_encoding::decoder::decode(cursor, &mut he_dec)?;
-        
-    //     println!("{:?}", str::from_utf8(&he_dec));
-    //     assert_eq!(he_dec, thing);
-    //     Ok(())
-    // }
 }
