@@ -526,7 +526,10 @@ before using this eBook.";
         
         println!("{:?}", str::from_utf8(&decoded));
         assert_eq!(original_vu8.len(), decoded.len());
-        let decoded = move_to_front::move_to_front_decode(&mut alphabet, &he_dec);
+
+        let mut alphabet_d = LinkedList::new();
+        alphabet_d.extend(&alph);
+        let decoded = move_to_front::move_to_front_decode(&mut alphabet_d, &he_dec);
         
         println!("{:?}", str::from_utf8(&decoded));
         assert_eq!(original_vu8, decoded);
