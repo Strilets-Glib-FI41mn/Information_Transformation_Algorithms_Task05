@@ -16,7 +16,12 @@ for file in "$folder1"/*; do
             echo "Comparing: $filename"
             echo "Size in $folder1: $size1 bytes"
             echo "Size in $folder2: $size2 bytes"
-            echo "scale=4; $size1 / $size2" | bc
+            if [ $size2 -ne 0 ]; then
+                compression=$(echo "scale=4; $size1 / $size2" | bc)
+            else
+                compression="undefined (size is zero)"
+            fi
+            echo "compression = $compression"
             echo ""
         fi
     done
