@@ -192,7 +192,7 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
                     while let Ok(size) = cursor.read(&mut buff) && size > 0{
                         // println!("Size:: {size}");
                         let (mut res, n0) = burrows_wheeler_transform::bwt_encode(&buff[0..size]);
-                        println!("no {}", n0);
+                        // println!("no {}", n0);
                         working_space.push(n0.try_into().unwrap());
                         working_space.append(&mut res);
                     }
@@ -207,7 +207,6 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
                 let mut alphabet = LinkedList::new();
                 alphabet.extend(&alph);
                 let a = move_to_front(&mut alphabet, &working_space);
-                let start_alphabet: Vec<_> = alphabet.into_iter().collect();
                 working_space = a.into_iter().map(|u| u as u8).collect();
             }
             // println!("size of space: {}", working_space.len());
@@ -276,9 +275,6 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
                 // println!("SIZE: {}", input_buffer.len());
                 let mut cursor = std::io::Cursor::new(&input_buffer);
                 while let Ok(size) = cursor.read(&mut buff) && size > 1{
-                    // println!("{size}, {}", input_buffer[1..size].len());
-                    println!("buff {:?}", buff);
-                    println!("no {}, pos1: {}", buff[0], input_buffer[1..size][buff[0] as usize]);
                     let mut res = burrows_wheeler_transform::bwt_decode(input_buffer[1..size].into(), input_buffer[0].into());
                     working_space.append(&mut res);
                 }
@@ -373,9 +369,9 @@ pub struct Config {
     #[arg(long, short, value_enum, help = "Ecnoding used in encoding mode")]
     encoding: Encoding,
 
-    #[arg(long, short, default_value_t = false)]
+    #[arg(long, default_value_t = false)]
     bwt: bool,
-    #[arg(long, short, default_value_t = false)]
+    #[arg(long, default_value_t = false)]
     mtf: bool,
 
     #[arg(long, short, default_value_t = FilledOption::Clear, value_enum, help = "Filled behavior of dictionary used in encoding mode")]
