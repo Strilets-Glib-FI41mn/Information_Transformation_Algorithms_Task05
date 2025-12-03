@@ -484,7 +484,6 @@ before using this eBook.";
         assert_eq!(original_vu8, decoded);
         Ok(())
     }
-
     #[test]
     fn mtf_text_big() -> std::io::Result<()>{
         let original_vu8 = PREAMBLE.as_bytes();
@@ -521,13 +520,15 @@ before using this eBook.";
         huffman_encoding::decoder::decode_with_padding(cursor, &mut he_dec)?;
         let he_dec: Vec<_> = he_dec.into_iter().map(|u| u as usize).collect();
         // let mut decoded:Vec<u8> = vec![];
-
         let mut alphabet_d = LinkedList::new();
         alphabet_d.extend(&alph);
         let decoded = move_to_front::move_to_front_decode(&mut alphabet_d, &he_dec);
         
         println!("{:?}", str::from_utf8(&decoded));
         assert_eq!(original_vu8.len(), decoded.len());
+        let decoded = move_to_front::move_to_front_decode(&mut alphabet, &he_dec);
+        
+        println!("{:?}", str::from_utf8(&decoded));
         assert_eq!(original_vu8, decoded);
         Ok(())
     }
