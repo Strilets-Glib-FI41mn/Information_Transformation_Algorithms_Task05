@@ -369,12 +369,12 @@ pub struct Config {
     #[arg(long, short, value_enum, help = "Ecnoding used in encoding mode")]
     encoding: Encoding,
 
-    #[arg(long, default_value_t = false)]
+    #[arg(long, default_value_t = false, help = "Burrows wheeler transform procedure when encoding")]
     bwt: bool,
-    #[arg(long, default_value_t = false)]
+    #[arg(long, default_value_t = false, help = "Move to front procedure when encoding")]
     mtf: bool,
 
-    #[arg(long, short, default_value_t = FilledOption::Clear, value_enum, help = "Filled behavior of dictionary used in encoding mode")]
+    #[arg(long, short, default_value_t = FilledOption::Clear, value_enum, help = "Filled behavior of dictionary used in zwl encoding mode")]
     filled_behaviour: FilledOption,
 
     #[arg(long, short, default_value_t = false)]
