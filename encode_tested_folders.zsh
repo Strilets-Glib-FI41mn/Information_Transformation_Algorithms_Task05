@@ -1,5 +1,6 @@
 #!/bin/zsh
 ./encode_files_in_folder.zsh "epub"
+cargo build --release
 echo "epub done"
 ./encode_files_in_folder.zsh "executable"
 echo "executable done"
