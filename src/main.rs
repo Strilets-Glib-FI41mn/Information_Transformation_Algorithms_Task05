@@ -575,13 +575,14 @@ before using this eBook.";
         let mut cursor_writter = std::io::Cursor::new(&mut zwl_enc);
 
         let mut enc = zwl_gs::bit_encoder::ZwlBitEncoder::<like_u12::LikeU12, _>::new(cursor_mtf, zwl_gs::dictionary::FilledBehaviour::Clear);
-        // huffman_encoding::encoder::encode_with_padding(cursor, &mut cursor_writter)?;
+        println!("started encoding");
         enc.encode_headerless(&mut cursor_writter)?;
         
-        let cursor = std::io::Cursor::new(&zwl_enc);
+        let cursor_zwl_enc = std::io::Cursor::new(&zwl_enc);
         let mut zwl_dec = vec![];
 
-        let mut dec = zwl_gs::bit_decoder::ZwlBitDecoder::<like_u12::LikeU12, _>::new(cursor, zwl_gs::dictionary::FilledBehaviour::Clear);
+        println!("started decoding");
+        let mut dec = zwl_gs::bit_decoder::ZwlBitDecoder::<like_u12::LikeU12, _>::new(cursor_zwl_enc, zwl_gs::dictionary::FilledBehaviour::Clear);
         dec.decode(&mut zwl_dec)?;
 
         let zwl_dec: Vec<_> = zwl_dec.into_iter().map(|u| u as usize).collect();
@@ -593,7 +594,13 @@ before using this eBook.";
 
         let mut decoded_bwt:Vec<u8> = vec![];
         let mut out_buff = [0u8; 9];
+        let mut i = 0;
         while let Ok(size) = cursor.read(&mut out_buff) && size > 1{
+            i += 1;
+            if out_buff[0] > 7 {
+                println!("i: {i}");
+                continue;
+            }
             let mut res = bwt_decode(out_buff[1..size].into(), out_buff[0].into());
             decoded_bwt.append(&mut res);
         }
