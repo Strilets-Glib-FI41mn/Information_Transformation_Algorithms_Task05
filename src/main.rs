@@ -213,19 +213,19 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
             match config.encoding{
                 Encoding::ZWLU12 => {
                     let mut encoder = zwl_gs::bit_encoder::ZwlBitEncoder::<zwl_gs::like_u12::LikeU12, _>::new(working_space.as_slice(), config.filled_behaviour.clone().into());
-                    encoder.encode(output)?;
+                    encoder.encode_headerless(output)?;
                 },
                 Encoding::ZWLU16 => {
                     let mut encoder =  zwl_gs::bit_encoder::ZwlBitEncoder::<zwl_gs::like_u16::LikeU16, _>::new(working_space.as_slice(), config.filled_behaviour.clone().into());
-                    encoder.encode(output)?;
+                    encoder.encode_headerless(output)?;
                 },
                 Encoding::ZWLU32 => {
                     let mut encoder = zwl_gs::bit_encoder::ZwlBitEncoder::<zwl_gs::like_u32::LikeU32, _>::new(working_space.as_slice(), config.filled_behaviour.clone().into());
-                    encoder.encode(output)?;
+                    encoder.encode_headerless(output)?;
                 },
                 Encoding::ZWLU64 => {
                     let mut encoder = zwl_gs::bit_encoder::ZwlBitEncoder::<zwl_gs::like_u64::LikeU64, _>::new(working_space.as_slice(), config.filled_behaviour.clone().into());
-                    encoder.encode(output)?;
+                    encoder.encode_headerless(output)?;
                 },
                 Encoding::Huffman => {
                     huffman_encoding::encoder::encode_with_padding(working_space.as_slice(), output)?;
@@ -385,8 +385,9 @@ pub struct Config {
 
 
 #[cfg(test)]
-mod huffman_tests {
+mod tests {
     use burrows_wheeler_transform::*;
+    use zwl_gs::like_u12;
     use std::{collections::LinkedList, io::Read};
     const PREAMBLE: &str =  "The Project Gutenberg eBook of The Ethics of Aristotle
     
@@ -499,6 +500,131 @@ before using this eBook.";
         Ok(())
     }
     #[test]
+    fn bwt_mtf_huffman_text_big() -> std::io::Result<()>{
+        let original_vu8 = PREAMBLE.as_bytes();
+
+
+        let mut cursor = std::io::Cursor::new(&original_vu8);
+        let mut buff_sm = [0; 8];
+        let mut collected_bwt: Vec<u8> = vec![];
+        while let Ok(size) = cursor.read(&mut buff_sm) && size > 0{
+            let (mut res, n0) = bwt_encode(&buff_sm[0..size]);
+            collected_bwt.push(n0.try_into().unwrap());
+            collected_bwt.append(&mut res);
+        }
+
+        println!("{}", original_vu8.len());
+        let alph = (0..=u8::MAX).map(|byte| byte).collect::<Vec<u8>>();
+        let mut alphabet = LinkedList::new();
+        alphabet.extend(&alph);
+        let collected_mtf :Vec<_> = move_to_front::move_to_front(&mut alphabet, &collected_bwt).iter().map(|u| *u as u8).collect();
+
+        let cursor_mtf = std::io::Cursor::new(&collected_mtf);
+        let mut he_text = vec![];
+        let mut cursor_writter = std::io::Cursor::new(&mut he_text);
+        huffman_encoding::encoder::encode_with_padding(cursor_mtf, &mut cursor_writter)?;
+        
+        let cursor = std::io::Cursor::new(&he_text);
+        let mut he_dec = vec![];
+
+        huffman_encoding::decoder::decode_with_padding(cursor, &mut he_dec)?;
+
+        let he_dec: Vec<_> = he_dec.into_iter().map(|u| u as usize).collect();
+
+        let mut alphabet_d = LinkedList::new();
+        alphabet_d.extend(&alph);
+        let decoded_mtf = move_to_front::move_to_front_decode(&mut alphabet_d, &he_dec);
+        let mut cursor = std::io::Cursor::new(&decoded_mtf);
+
+        let mut decoded_bwt:Vec<u8> = vec![];
+        let mut out_buff = [0u8; 9];
+        while let Ok(size) = cursor.read(&mut out_buff) && size > 1{
+            let mut res = bwt_decode(out_buff[1..size].into(), out_buff[0].into());
+            decoded_bwt.append(&mut res);
+        }
+        
+        
+        println!("{:?}", str::from_utf8(&decoded_bwt));
+        assert_eq!(original_vu8, decoded_bwt);
+        Ok(())
+    }
+
+
+    #[test]
+    fn bwt_mtf_zwlu12_text_big() -> std::io::Result<()>{
+        let original_vu8 = PREAMBLE.as_bytes();
+
+
+        let mut cursor = std::io::Cursor::new(&original_vu8);
+        let mut buff_sm = [0; 8];
+        let mut collected_bwt: Vec<u8> = vec![];
+        while let Ok(size) = cursor.read(&mut buff_sm) && size > 0{
+            let (mut res, n0) = bwt_encode(&buff_sm[0..size]);
+            collected_bwt.push(n0.try_into().unwrap());
+            collected_bwt.append(&mut res);
+        }
+
+        println!("{}", original_vu8.len());
+        let alph = (0..=u8::MAX).map(|byte| byte).collect::<Vec<u8>>();
+        let mut alphabet = LinkedList::new();
+        alphabet.extend(&alph);
+        let collected_mtf :Vec<_> = move_to_front::move_to_front(&mut alphabet, &collected_bwt).iter().map(|u| *u as u8).collect();
+
+        let cursor_mtf = std::io::Cursor::new(&collected_mtf);
+        let mut zwl_enc = vec![];
+        let mut cursor_writter = std::io::Cursor::new(&mut zwl_enc);
+
+        let mut enc = zwl_gs::bit_encoder::ZwlBitEncoder::<like_u12::LikeU12, _>::new(cursor_mtf, zwl_gs::dictionary::FilledBehaviour::Clear);
+        // huffman_encoding::encoder::encode_with_padding(cursor, &mut cursor_writter)?;
+        enc.encode_headerless(&mut cursor_writter)?;
+        
+        let cursor = std::io::Cursor::new(&zwl_enc);
+        let mut zwl_dec = vec![];
+
+        let mut dec = zwl_gs::bit_decoder::ZwlBitDecoder::<like_u12::LikeU12, _>::new(cursor, zwl_gs::dictionary::FilledBehaviour::Clear);
+        dec.decode(&mut zwl_dec)?;
+
+        let zwl_dec: Vec<_> = zwl_dec.into_iter().map(|u| u as usize).collect();
+
+        let mut alphabet_d = LinkedList::new();
+        alphabet_d.extend(&alph);
+        let decoded_mtf = move_to_front::move_to_front_decode(&mut alphabet_d, &zwl_dec);
+        let mut cursor = std::io::Cursor::new(&decoded_mtf);
+
+        let mut decoded_bwt:Vec<u8> = vec![];
+        let mut out_buff = [0u8; 9];
+        while let Ok(size) = cursor.read(&mut out_buff) && size > 1{
+            let mut res = bwt_decode(out_buff[1..size].into(), out_buff[0].into());
+            decoded_bwt.append(&mut res);
+        }
+        
+        
+        println!("{:?}", str::from_utf8(&decoded_bwt));
+        assert_eq!(original_vu8, decoded_bwt);
+        Ok(())
+    }
+    
+    #[test]
+    fn zwl_u12_test() -> std::io::Result<()> {
+        let original_vu8 = PREAMBLE.as_bytes();
+        let cursor = std::io::Cursor::new(&original_vu8);
+        let mut zwl_enc = vec![];
+        let mut cursor_writter = std::io::Cursor::new(&mut zwl_enc);
+
+        let mut enc = zwl_gs::bit_encoder::ZwlBitEncoder::<like_u12::LikeU12, _>::new(cursor, zwl_gs::dictionary::FilledBehaviour::Clear);
+        // huffman_encoding::encoder::encode_with_padding(cursor, &mut cursor_writter)?;
+        enc.encode_headerless(&mut cursor_writter)?;
+        
+        let cursor = std::io::Cursor::new(&zwl_enc);
+        let mut zwl_dec = vec![];
+
+        let mut dec = zwl_gs::bit_decoder::ZwlBitDecoder::<like_u12::LikeU12, _>::new(cursor, zwl_gs::dictionary::FilledBehaviour::Clear);
+        dec.decode(&mut zwl_dec)?;
+        assert_eq!(original_vu8, zwl_dec);
+        Ok(())
+    }
+
+    #[test]
     fn mtf_huffman_text_big() -> std::io::Result<()>{
         let original_vu8 = PREAMBLE.as_bytes();
         println!("{}", original_vu8.len());
@@ -531,4 +657,5 @@ before using this eBook.";
         assert_eq!(original_vu8, decoded);
         Ok(())
     }
+    
 }

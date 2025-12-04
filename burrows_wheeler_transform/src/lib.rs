@@ -28,6 +28,9 @@ where T: Clone + PartialEq + Ord
     let result:  Vec<_> =table.iter().map(|t| {
         t.0[lenth - 1].clone()
     }).collect();
+    if o >= input.len(){
+        println!("{o} >= {}", input.len());
+    }
     (result, o)
 }
 
