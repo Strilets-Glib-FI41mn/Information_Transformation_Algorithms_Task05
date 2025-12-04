@@ -7,7 +7,7 @@ edition = "2024"
 burrows_wheeler_transform = {path = "burrows_wheeler_transform"}
 move_to_front = {path = "move_to_front"}
 huffman_encoding = {git = "https://github.com/Strilets-Glib-FI41mn/Information_Transformation_Algorithms_Task03", tag = "0.4.1"}
-zwl_gs = {git = "https://github.com/Strilets-Glib-FI41mn/Information_Transformation_Algorithms_Task04", tag = "0.4.3"}
+zwl_gs = {git = "https://github.com/Strilets-Glib-FI41mn/Information_Transformation_Algorithms_Task04", tag = "0.4.4"}
 
 
 #CLI:

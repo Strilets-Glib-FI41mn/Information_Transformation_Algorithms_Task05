@@ -1,7 +1,11 @@
 #!/bin/zsh
-./encode_files_in_folder.zsh "epub" &
-./encode_files_in_folder.zsh "executable" &
-./encode_files_in_folder.zsh "pages" &
-./encode_files_in_folder.zsh "txt" &
-./encode_files_in_folder.zsh "pdf" &
-wait
+./encode_files_in_folder.zsh "epub"
+echo "epub done"
+./encode_files_in_folder.zsh "executable"
+echo "executable done"
+./encode_files_in_folder.zsh "pages"
+echo "pages done"
+./encode_files_in_folder.zsh "txt"
+echo "txt done"
+./encode_files_in_folder.zsh "pdf"
+echo "pdf done"
