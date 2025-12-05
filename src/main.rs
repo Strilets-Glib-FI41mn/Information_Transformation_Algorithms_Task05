@@ -1,4 +1,4 @@
-use std::{collections::LinkedList, fs::File, io::{Read, Write}, path::PathBuf};
+use std::{collections::LinkedList, fs::File, io::{BufWriter, Cursor, Read, Write}, path::PathBuf};
 use dialoguer::{Confirm, Editor};
 use move_to_front::{move_to_front, move_to_front_decode};
 use burrows_wheeler_transform;
@@ -210,30 +210,40 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
                 working_space = a.into_iter().map(|u| u as u8).collect();
             }
             // println!("size of space: {}", working_space.len());
+            let mut ouptut_buff = BufWriter::new(output);
             match config.encoding{
                 Encoding::ZWLU12 => {
                     let mut encoder = zwl_gs::bit_encoder::ZwlBitEncoder::<zwl_gs::like_u12::LikeU12, _>::new(working_space.as_slice(), config.filled_behaviour.clone().into());
-                    encoder.encode_headerless(output)?;
+                    encoder.encode_headerless(&mut ouptut_buff)?;
+                    // output.write(&encoded)?;
                 },
                 Encoding::ZWLU16 => {
                     let mut encoder =  zwl_gs::bit_encoder::ZwlBitEncoder::<zwl_gs::like_u16::LikeU16, _>::new(working_space.as_slice(), config.filled_behaviour.clone().into());
-                    encoder.encode_headerless(output)?;
+                    println!("started to encode zwl16u");
+                    encoder.encode_headerless(&mut ouptut_buff)?;
+                    // output.write(&encoded)?;
+                    println!("encoded successfully {:?}", config.output_file);
                 },
                 Encoding::ZWLU32 => {
                     let mut encoder = zwl_gs::bit_encoder::ZwlBitEncoder::<zwl_gs::like_u32::LikeU32, _>::new(working_space.as_slice(), config.filled_behaviour.clone().into());
-                    encoder.encode_headerless(output)?;
+                    encoder.encode_headerless(&mut ouptut_buff)?;
+                    // output.write(&encoded)?;
                 },
                 Encoding::ZWLU64 => {
                     let mut encoder = zwl_gs::bit_encoder::ZwlBitEncoder::<zwl_gs::like_u64::LikeU64, _>::new(working_space.as_slice(), config.filled_behaviour.clone().into());
-                    encoder.encode_headerless(output)?;
+                    encoder.encode_headerless(&mut ouptut_buff)?;
+                    // output.write(&encoded)?;
                 },
                 Encoding::Huffman => {
-                    huffman_encoding::encoder::encode_with_padding(working_space.as_slice(), output)?;
+                    // let mut cursor = Cursor::new(&mut encoded);
+                    huffman_encoding::encoder::encode_with_padding(working_space.as_slice(), &mut ouptut_buff)?;
+                    // huffman_encoding::encoder::encode_with_padding(working_space.as_slice(), &mut cursor)?;
+                    // output.write(&encoded)?;
                 },
             }
+            ouptut_buff.flush()?;
         },
         Mode::Decode => {
-
             let mut input_buffer = vec![];
             input.read_to_end(&mut input_buffer)?;
             let mut working_space = vec![];
