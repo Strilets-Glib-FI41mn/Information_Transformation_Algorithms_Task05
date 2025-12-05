@@ -184,9 +184,6 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
             // let mut working_space = vec![];
             // let mut input_buffer = vec![];
             let mut input_buf = BufReader::new(input);
-            // let read = 
-            // input.read_to_end(&mut input_buffer)?;
-            // println!("read: {read}");
             match config.bwt{
                 true => {
                     // println!("SIZE: {}", input_buffer.len());
@@ -230,10 +227,10 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
                 },
                 Encoding::ZWLU16 => {
                     let mut encoder =  zwl_gs::bit_encoder::ZwlBitEncoder::<zwl_gs::like_u16::LikeU16, _>::new(&mut input_buf, config.filled_behaviour.clone().into());
-                    println!("started to encode zwl16u");
+                    // println!("started to encode zwl16u");
                     encoder.encode_headerless(&mut ouptut_buff)?;
                     // output.write(&encoded)?;
-                    println!("encoded successfully {:?}", config.output_file);
+                    // println!("encoded successfully {:?}", config.output_file);
                 },
                 Encoding::ZWLU32 => {
                     let mut encoder = zwl_gs::bit_encoder::ZwlBitEncoder::<zwl_gs::like_u32::LikeU32, _>::new(&mut input_buf, config.filled_behaviour.clone().into());
