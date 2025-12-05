@@ -1,4 +1,4 @@
-use std::{collections::LinkedList, fs::File, io::{BufReader, BufWriter, Read, Write}, path::PathBuf};
+use std::{collections::LinkedList, fs::File, io::{BufReader, BufWriter, Read, Seek, Write}, path::PathBuf};
 use dialoguer::{Confirm, Editor};
 use move_to_front::{move_to_front_decode_r_w, move_to_front_rw};
 use burrows_wheeler_transform;
@@ -125,7 +125,8 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
         },
     };
     // println!("Input file: {input_path:?}, output file: {output_path:?}");
-    let mut input = File::open(&input_path)?;
+    let input = File::open(&input_path)?;
+    let mut input_buf = BufReader::new(input);
     let mut output = File::create(output_path)?;
     let mut header = vec![ver];
     match config.mode{
@@ -143,14 +144,14 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
         },
         Mode::Decode => {
             let mut version = [0];
-            input.read_exact(&mut version)?;
+            input_buf.read_exact(&mut version)?;
             // let read_v = input.read(&mut version)?;
             // println!("read_v: {read_v}");
             if version[0] != 0{
                 panic!("Version {} is unsuported", version[0]);
             }
             let mut header_pt2 = [0,0,0];
-            input.read_exact(&mut header_pt2)?;
+            input_buf.read_exact(&mut header_pt2)?;
             config.encoding = header_pt2[0].try_into().unwrap();
             config.bwt = match header_pt2[1]{
                 0 => false,
@@ -164,7 +165,7 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
             };
             if &config.encoding != &Encoding::Huffman{
                 let mut small = vec![0];
-                input.read_exact(&mut small)?;
+                input_buf.read_exact(&mut small)?;
                 config.filled_behaviour = match small[0] {
                     0 =>{
                         FilledOption::Clear
@@ -183,30 +184,23 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
             let mut working_buffer =  BufWriter::new(working_temp_file);
             // let mut working_space = vec![];
             // let mut input_buffer = vec![];
-            let mut input_buf = BufReader::new(input);
-            match config.bwt{
-                true => {
-                    // println!("SIZE: {}", input_buffer.len());
-                    let mut buff = [0; 8];
-                    // let mut cursor = std::io::Cursor::new(&input_buffer);
-                    while let Ok(size) = input_buf.read(&mut buff) && size > 0{
-                        // println!("Size:: {size}");
-                        let (res, n0) = burrows_wheeler_transform::bwt_encode(&buff[0..size]);
-                        // println!("no {}", n0);
-                        working_buffer.write_all(&[n0.try_into().unwrap()])?;
-                        working_buffer.write_all(&res)?;
-                        // working_space.push(n0.try_into().unwrap());
-                        // working_space.append(&mut res);
-                    }
-
-                    working_buffer.flush()?;
-                    input_buf = BufReader::new(working_buffer.into_inner()?);
-                    working_temp_file = tempfile::tempfile()?;
-                    working_buffer =  BufWriter::new(working_temp_file);
-                },
-                false => {
-                    // working_space.append(&mut input_buffer);
-                },
+            if config.bwt{
+                // println!("SIZE: {}", input_buffer.len());
+                let mut buff = [0; 8];
+                // let mut cursor = std::io::Cursor::new(&input_buffer);
+                while let Ok(size) = input_buf.read(&mut buff) && size > 0{
+                    // println!("Size:: {size}");
+                    let (res, n0) = burrows_wheeler_transform::bwt_encode(&buff[0..size]);
+                    // println!("no {}", n0);
+                    working_buffer.write_all(&[n0.try_into().unwrap()])?;
+                    working_buffer.write_all(&res)?;
+                    // working_space.push(n0.try_into().unwrap());
+                    // working_space.append(&mut res);
+                }
+                working_buffer.flush()?;
+                input_buf = BufReader::new(working_buffer.into_inner()?);
+                working_temp_file = tempfile::tempfile()?;
+                working_buffer =  BufWriter::new(working_temp_file);
             }
             // println!("size of space: {}", working_space.len());
             if config.mtf{
@@ -253,15 +247,14 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
         Mode::Decode => {
             let (working_d, working_mtf, working_bwt) = {
                 match (config.mtf, config.bwt){
-                    (true, true) => (Some(tempfile::tempfile()?), Some(tempfile::tempfile()?), Some(output)),
-                    (true, false) => (Some(tempfile::tempfile()?), Some(output), None),
-                    (false, true) => (None, Some(tempfile::tempfile()?), Some(output)),
-                    (false, false) => (Some(output), None, None),
+                    (true, true) => (tempfile::tempfile()?, Some(tempfile::tempfile()?), Some(output)),
+                    (true, false) => (tempfile::tempfile()?, Some(output), None),
+                    (false, true) => (tempfile::tempfile()?, None, Some(output)),
+                    (false, false) => (output, None, None),
                 }
             };
-            let mut working = working_d.unwrap();
-            let mut working_buffer =  BufWriter::new(working);
-            let mut input_buf = BufReader::new(input);
+            let mut working_buffer =  BufWriter::new(working_d);
+            // let mut input_buf = BufReader::new(input);
             // let mut input_buffer = vec![];
             // input.read_to_end(&mut input_buffer)?;
             // let mut working_space = vec![];
@@ -291,8 +284,7 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
             if config.mtf{
                 input_buf = BufReader::new(working_buffer.into_inner()?);
                 // println!("MTF!");
-                working = working_mtf.unwrap();
-                working_buffer =  BufWriter::new(working);
+                working_buffer =  BufWriter::new(working_mtf.unwrap());
                 let alph = (0..=u8::MAX).map(|byte| byte).collect::<Vec<u8>>();
                 let mut alphabet = LinkedList::new();
                 alphabet.extend(&alph);
@@ -302,8 +294,7 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
             }
             if config.bwt{
                 input_buf = BufReader::new(working_buffer.into_inner()?);
-                working = working_bwt.unwrap();
-                working_buffer =  BufWriter::new(working);
+                working_buffer =  BufWriter::new(working_bwt.unwrap());
                 // let mut decoded = vec![];
                 let mut buff = [0; 9];
                 // println!("SIZE: {}", input_buffer.len());
