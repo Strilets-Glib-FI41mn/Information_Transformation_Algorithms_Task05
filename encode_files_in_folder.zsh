@@ -18,9 +18,6 @@ echo "huffman done"
 
 target/release/Information_Transformation_Algorithms_Task05 tested/$1 tested/$1/zwlu16/00 -e zwlu16 -o &
 target/release/Information_Transformation_Algorithms_Task05 tested/$1 tested/$1/zwlu16/bwt -e zwlu16 --bwt -o &
-wait
-echo "zwlu16 2/4"
-
 target/release/Information_Transformation_Algorithms_Task05 tested/$1  tested/$1/zwlu16/mtf -e zwlu16 --mtf -o &
 target/release/Information_Transformation_Algorithms_Task05 tested/$1  tested/$1/zwlu16/11 -e zwlu16 --bwt --mtf -o &
 wait

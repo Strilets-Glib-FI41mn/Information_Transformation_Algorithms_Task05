@@ -1,6 +1,6 @@
-use std::{collections::LinkedList, fs::File, io::{BufWriter, Cursor, Read, Write}, path::PathBuf};
+use std::{collections::LinkedList, fs::File, io::{BufReader, BufWriter, Read, Write}, path::PathBuf};
 use dialoguer::{Confirm, Editor};
-use move_to_front::{move_to_front, move_to_front_decode};
+use move_to_front::{move_to_front_decode_r_w, move_to_front_rw};
 use burrows_wheeler_transform;
 use clap::{Parser, arg};
 use serde::Serialize;
@@ -179,26 +179,36 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
     }
     match config.mode{
         Mode::Encode => {
-            let mut working_space = vec![];
-            let mut input_buffer = vec![];
+            let mut working_temp_file = tempfile::tempfile()?;
+            let mut working_buffer =  BufWriter::new(working_temp_file);
+            // let mut working_space = vec![];
+            // let mut input_buffer = vec![];
+            let mut input_buf = BufReader::new(input);
             // let read = 
-            input.read_to_end(&mut input_buffer)?;
+            // input.read_to_end(&mut input_buffer)?;
             // println!("read: {read}");
             match config.bwt{
                 true => {
                     // println!("SIZE: {}", input_buffer.len());
                     let mut buff = [0; 8];
-                    let mut cursor = std::io::Cursor::new(&input_buffer);
-                    while let Ok(size) = cursor.read(&mut buff) && size > 0{
+                    // let mut cursor = std::io::Cursor::new(&input_buffer);
+                    while let Ok(size) = input_buf.read(&mut buff) && size > 0{
                         // println!("Size:: {size}");
-                        let (mut res, n0) = burrows_wheeler_transform::bwt_encode(&buff[0..size]);
+                        let (res, n0) = burrows_wheeler_transform::bwt_encode(&buff[0..size]);
                         // println!("no {}", n0);
-                        working_space.push(n0.try_into().unwrap());
-                        working_space.append(&mut res);
+                        working_buffer.write_all(&[n0.try_into().unwrap()])?;
+                        working_buffer.write_all(&res)?;
+                        // working_space.push(n0.try_into().unwrap());
+                        // working_space.append(&mut res);
                     }
+
+                    working_buffer.flush()?;
+                    input_buf = BufReader::new(working_buffer.into_inner()?);
+                    working_temp_file = tempfile::tempfile()?;
+                    working_buffer =  BufWriter::new(working_temp_file);
                 },
                 false => {
-                    working_space.append(&mut input_buffer);
+                    // working_space.append(&mut input_buffer);
                 },
             }
             // println!("size of space: {}", working_space.len());
@@ -206,37 +216,37 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
                 let alph = (0..=u8::MAX).map(|byte| byte).collect::<Vec<u8>>();
                 let mut alphabet = LinkedList::new();
                 alphabet.extend(&alph);
-                let a = move_to_front(&mut alphabet, &working_space);
-                working_space = a.into_iter().map(|u| u as u8).collect();
+                move_to_front_rw(&mut alphabet, &mut input_buf, &mut working_buffer)?;
+                working_buffer.flush()?;
+                input_buf = BufReader::new(working_buffer.into_inner()?);
             }
             // println!("size of space: {}", working_space.len());
             let mut ouptut_buff = BufWriter::new(output);
             match config.encoding{
                 Encoding::ZWLU12 => {
-                    let mut encoder = zwl_gs::bit_encoder::ZwlBitEncoder::<zwl_gs::like_u12::LikeU12, _>::new(working_space.as_slice(), config.filled_behaviour.clone().into());
+                    let mut encoder: zwl_gs::bit_encoder::ZwlBitEncoder<zwl_gs::like_u12::LikeU12, &mut BufReader<File>> = zwl_gs::bit_encoder::ZwlBitEncoder::<zwl_gs::like_u12::LikeU12, _>::new(&mut input_buf, config.filled_behaviour.clone().into());
                     encoder.encode_headerless(&mut ouptut_buff)?;
                     // output.write(&encoded)?;
                 },
                 Encoding::ZWLU16 => {
-                    let mut encoder =  zwl_gs::bit_encoder::ZwlBitEncoder::<zwl_gs::like_u16::LikeU16, _>::new(working_space.as_slice(), config.filled_behaviour.clone().into());
+                    let mut encoder =  zwl_gs::bit_encoder::ZwlBitEncoder::<zwl_gs::like_u16::LikeU16, _>::new(&mut input_buf, config.filled_behaviour.clone().into());
                     println!("started to encode zwl16u");
                     encoder.encode_headerless(&mut ouptut_buff)?;
                     // output.write(&encoded)?;
                     println!("encoded successfully {:?}", config.output_file);
                 },
                 Encoding::ZWLU32 => {
-                    let mut encoder = zwl_gs::bit_encoder::ZwlBitEncoder::<zwl_gs::like_u32::LikeU32, _>::new(working_space.as_slice(), config.filled_behaviour.clone().into());
+                    let mut encoder = zwl_gs::bit_encoder::ZwlBitEncoder::<zwl_gs::like_u32::LikeU32, _>::new(&mut input_buf, config.filled_behaviour.clone().into());
                     encoder.encode_headerless(&mut ouptut_buff)?;
                     // output.write(&encoded)?;
                 },
                 Encoding::ZWLU64 => {
-                    let mut encoder = zwl_gs::bit_encoder::ZwlBitEncoder::<zwl_gs::like_u64::LikeU64, _>::new(working_space.as_slice(), config.filled_behaviour.clone().into());
+                    let mut encoder = zwl_gs::bit_encoder::ZwlBitEncoder::<zwl_gs::like_u64::LikeU64, _>::new(&mut input_buf, config.filled_behaviour.clone().into());
                     encoder.encode_headerless(&mut ouptut_buff)?;
                     // output.write(&encoded)?;
                 },
                 Encoding::Huffman => {
-                    // let mut cursor = Cursor::new(&mut encoded);
-                    huffman_encoding::encoder::encode_with_padding(working_space.as_slice(), &mut ouptut_buff)?;
+                    huffman_encoding::encoder::encode_with_padding(&mut input_buf, &mut ouptut_buff)?;
                     // huffman_encoding::encoder::encode_with_padding(working_space.as_slice(), &mut cursor)?;
                     // output.write(&encoded)?;
                 },
@@ -244,54 +254,68 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
             ouptut_buff.flush()?;
         },
         Mode::Decode => {
-            let mut input_buffer = vec![];
-            input.read_to_end(&mut input_buffer)?;
-            let mut working_space = vec![];
-
+            let (working_d, working_mtf, working_bwt) = {
+                match (config.mtf, config.bwt){
+                    (true, true) => (Some(tempfile::tempfile()?), Some(tempfile::tempfile()?), Some(output)),
+                    (true, false) => (Some(tempfile::tempfile()?), Some(output), None),
+                    (false, true) => (None, Some(tempfile::tempfile()?), Some(output)),
+                    (false, false) => (Some(output), None, None),
+                }
+            };
+            let mut working = working_d.unwrap();
+            let mut working_buffer =  BufWriter::new(working);
+            let mut input_buf = BufReader::new(input);
+            // let mut input_buffer = vec![];
+            // input.read_to_end(&mut input_buffer)?;
+            // let mut working_space = vec![];
+            
             match config.encoding{
                 Encoding::ZWLU12 => {
-                    let mut decoder = zwl_gs::bit_decoder::ZwlBitDecoder::<zwl_gs::like_u12::LikeU12, _>::new(input_buffer.as_slice(), config.filled_behaviour.clone().into());
-                    decoder.decode(&mut working_space)?;
+                    let mut decoder = zwl_gs::bit_decoder::ZwlBitDecoder::<zwl_gs::like_u12::LikeU12, _>::new(input_buf, config.filled_behaviour.clone().into());
+                    decoder.decode(&mut working_buffer)?;
                 },
                 Encoding::ZWLU16 => {
-                    let mut decoder = zwl_gs::bit_decoder::ZwlBitDecoder::<zwl_gs::like_u16::LikeU16, _>::new(input_buffer.as_slice(), config.filled_behaviour.clone().into());
-                    decoder.decode(&mut working_space)?;
+                    let mut decoder = zwl_gs::bit_decoder::ZwlBitDecoder::<zwl_gs::like_u16::LikeU16, _>::new(input_buf, config.filled_behaviour.clone().into());
+                    decoder.decode(&mut working_buffer)?;
                 },
                 Encoding::ZWLU32 => {
-                    let mut decoder = zwl_gs::bit_decoder::ZwlBitDecoder::<zwl_gs::like_u32::LikeU32, _>::new(input_buffer.as_slice(), config.filled_behaviour.clone().into());
-                    decoder.decode(&mut working_space)?;
+                    let mut decoder = zwl_gs::bit_decoder::ZwlBitDecoder::<zwl_gs::like_u32::LikeU32, _>::new(input_buf, config.filled_behaviour.clone().into());
+                    decoder.decode(&mut working_buffer)?;
                 },
                 Encoding::ZWLU64 => {
-                    let mut decoder = zwl_gs::bit_decoder::ZwlBitDecoder::<zwl_gs::like_u64::LikeU64, _>::new(input_buffer.as_slice(), config.filled_behaviour.clone().into());
-                    decoder.decode(&mut working_space)?;
+                    let mut decoder = zwl_gs::bit_decoder::ZwlBitDecoder::<zwl_gs::like_u64::LikeU64, _>::new(input_buf, config.filled_behaviour.clone().into());
+                    decoder.decode(&mut working_buffer)?;
                 },
                 Encoding::Huffman => {
-                    let cursor_writter = std::io::Cursor::new(&mut input_buffer);
-                    huffman_encoding::decoder::decode_with_padding(cursor_writter, &mut working_space)?;
+                    huffman_encoding::decoder::decode_with_padding(input_buf, &mut working_buffer)?;
                 },
             }
-            
+            working_buffer.flush()?;
             if config.mtf{
+                input_buf = BufReader::new(working_buffer.into_inner()?);
                 // println!("MTF!");
+                working = working_mtf.unwrap();
+                working_buffer =  BufWriter::new(working);
                 let alph = (0..=u8::MAX).map(|byte| byte).collect::<Vec<u8>>();
                 let mut alphabet = LinkedList::new();
                 alphabet.extend(&alph);
-                let the_rest: Vec<_> = working_space.iter().map(|u| *u as usize).collect();
-                let decoded = move_to_front_decode(&mut alphabet, &the_rest);
-                working_space = decoded;
+                // let the_rest: Vec<_> = working_space.iter().map(|u| *u as usize).collect();
+                move_to_front_decode_r_w(&mut alphabet, &mut input_buf, &mut working_buffer)?;
+                working_buffer.flush()?;
             }
             if config.bwt{
-                let mut decoded = vec![];
+                input_buf = BufReader::new(working_buffer.into_inner()?);
+                working = working_bwt.unwrap();
+                working_buffer =  BufWriter::new(working);
+                // let mut decoded = vec![];
                 let mut buff = [0; 9];
                 // println!("SIZE: {}", input_buffer.len());
-                let mut cursor = std::io::Cursor::new(&working_space);
-                while let Ok(size) = cursor.read(&mut buff) && size > 1{
-                    let mut res = burrows_wheeler_transform::bwt_decode(buff[1..size].into(), buff[0].into());
-                    decoded.append(&mut res);
+                while let Ok(size) = input_buf.read(&mut buff) && size > 1{
+                    let res = burrows_wheeler_transform::bwt_decode(buff[1..size].into(), buff[0].into());
+                    working_buffer.write(&res)?;
                 }
-                working_space = decoded;
+                working_buffer.flush()?;
             }
-            output.write(&working_space)?;
         },
     }
     Ok(())
