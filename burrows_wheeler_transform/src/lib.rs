@@ -29,7 +29,7 @@ where T: Clone + PartialEq + Ord
         t.0[lenth - 1].clone()
     }).collect();
     if o >= input.len(){
-        println!("{o} >= {}", input.len());
+        println!("no: {o} >= lenth: {}", input.len());
     }
     (result, o)
 }
@@ -47,10 +47,13 @@ for<'b> &'b T: Clone + PartialEq + Ord  +  Copy,
     
     match pairs.iter().cnt_sort(){
         Ok(sorted) => {
-
             let mut pos = no;
             (0..code.len()).for_each(|i|{
-                pos = sorted[pos].1;
+                match sorted.get(pos) {
+                    Some(v) => pos = v.1,
+                    None => pos = 0,
+                }
+                // pos = sorted[pos].1;
                 res[i] = Some(code[pos]);
                 }
             );
@@ -62,7 +65,11 @@ for<'b> &'b T: Clone + PartialEq + Ord  +  Copy,
                 counting_sort::CountingSortError::SortingUnnecessary(_) => {
                     let mut pos = no;
                     (0..code.len()).for_each(|i|{
-                        pos = pairs[pos].1;
+                        match pairs.get(pos) {
+                            Some(v) => pos = v.1,
+                            None => pos = 0,
+                        }
+                        // pos = pairs[pos].1;
                         res[i] = Some(code[pos]);
                         }
                     );

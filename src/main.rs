@@ -271,13 +271,15 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
                 working_space = decoded;
             }
             if config.bwt{
+                let mut decoded = vec![];
                 let mut buff = [0; 9];
                 // println!("SIZE: {}", input_buffer.len());
-                let mut cursor = std::io::Cursor::new(&input_buffer);
+                let mut cursor = std::io::Cursor::new(&working_space);
                 while let Ok(size) = cursor.read(&mut buff) && size > 1{
-                    let mut res = burrows_wheeler_transform::bwt_decode(input_buffer[1..size].into(), input_buffer[0].into());
-                    working_space.append(&mut res);
+                    let mut res = burrows_wheeler_transform::bwt_decode(buff[1..size].into(), buff[0].into());
+                    decoded.append(&mut res);
                 }
+                working_space = decoded;
             }
             output.write(&working_space)?;
         },
