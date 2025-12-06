@@ -56,11 +56,6 @@ fn main() -> std::io::Result<()> {
         })
         .filter(|r| r.0.is_err())
         .collect();
-
-        // results.iter().for_each(|a|{
-        //     println!("error: {:?}, input path: {:?}, output_path: {:?}", &a.0, &a.1, &a.2)
-        // });
-
         if !results.is_empty(){
             return results.pop().unwrap().0;
         }
@@ -199,11 +194,11 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
                 }
                 working_buffer.flush()?;
                 input_buf = BufReader::new(working_buffer.into_inner()?);
-                working_temp_file = tempfile::tempfile()?;
-                working_buffer =  BufWriter::new(working_temp_file);
             }
             // println!("size of space: {}", working_space.len());
             if config.mtf{
+                working_temp_file = tempfile::tempfile()?;
+                working_buffer =  BufWriter::new(working_temp_file);
                 let alph = (0..=u8::MAX).map(|byte| byte).collect::<Vec<u8>>();
                 let mut alphabet = LinkedList::new();
                 alphabet.extend(&alph);
@@ -212,6 +207,7 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
                 input_buf = BufReader::new(working_buffer.into_inner()?);
             }
             // println!("size of space: {}", working_space.len());
+            println!("Output starts at: {:?}", output.seek(std::io::SeekFrom::Current(0)));
             let mut ouptut_buff = BufWriter::new(output);
             match config.encoding{
                 Encoding::ZWLU12 => {
@@ -237,9 +233,9 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
                     // output.write(&encoded)?;
                 },
                 Encoding::Huffman => {
+                    // println!("{:?}",input_buf.seek(std::io::SeekFrom::Current(0)));
+                    // huffman_encoding::encoder::encode_with_padding(&mut input_buf, &mut ouptut_buff)?;
                     huffman_encoding::encoder::encode_with_padding(&mut input_buf, &mut ouptut_buff)?;
-                    // huffman_encoding::encoder::encode_with_padding(working_space.as_slice(), &mut cursor)?;
-                    // output.write(&encoded)?;
                 },
             }
             ouptut_buff.flush()?;
@@ -265,6 +261,7 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
                     decoder.decode(&mut working_buffer)?;
                 },
                 Encoding::ZWLU16 => {
+                    println!("ZWLU16 decoding starts at: {:?}",input_buf.seek(std::io::SeekFrom::Current(0)));
                     let mut decoder = zwl_gs::bit_decoder::ZwlBitDecoder::<zwl_gs::like_u16::LikeU16, _>::new(input_buf, config.filled_behaviour.clone().into());
                     decoder.decode(&mut working_buffer)?;
                 },
@@ -277,6 +274,7 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
                     decoder.decode(&mut working_buffer)?;
                 },
                 Encoding::Huffman => {
+                    println!("Huffman decoding starts at: {:?}",input_buf.seek(std::io::SeekFrom::Current(0)));
                     huffman_encoding::decoder::decode_with_padding(input_buf, &mut working_buffer)?;
                 },
             }
