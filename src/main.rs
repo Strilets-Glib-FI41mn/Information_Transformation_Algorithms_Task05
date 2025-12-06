@@ -1,4 +1,4 @@
-use std::{collections::LinkedList, fs::File, io::{BufReader, BufWriter, Read, Seek, Write}, path::PathBuf};
+use std::{collections::LinkedList, fs::File, io::{BufReader, BufWriter, Read, Write}, path::PathBuf};
 use dialoguer::{Confirm, Editor};
 use move_to_front::{move_to_front_decode_r_w, move_to_front_rw};
 use clap::{Parser, arg};
@@ -206,7 +206,7 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
                 input_buf = BufReader::new(working_buffer.into_inner()?);
             }
             // println!("size of space: {}", working_space.len());
-            println!("Output starts at: {:?}", output.stream_position());
+            // println!("Output starts at: {:?}", output.stream_position());
             let mut ouptut_buff = BufWriter::new(output);
             match config.encoding{
                 Encoding::ZWLU12 => {
@@ -260,7 +260,7 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
                     decoder.decode(&mut working_buffer)?;
                 },
                 Encoding::ZWLU16 => {
-                    println!("ZWLU16 decoding starts at: {:?}",input_buf.stream_position());
+                    // println!("ZWLU16 decoding starts at: {:?}",input_buf.stream_position());
                     let mut decoder = zwl_gs::bit_decoder::ZwlBitDecoder::<zwl_gs::like_u16::LikeU16, _>::new(input_buf, config.filled_behaviour.clone().into());
                     decoder.decode(&mut working_buffer)?;
                 },
@@ -273,7 +273,7 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
                     decoder.decode(&mut working_buffer)?;
                 },
                 Encoding::Huffman => {
-                    println!("Huffman decoding starts at: {:?}",input_buf.stream_position());
+                    // println!("Huffman decoding starts at: {:?}",input_buf.stream_position());
                     huffman_encoding::decoder::decode_with_padding(input_buf, &mut working_buffer)?;
                 },
             }
