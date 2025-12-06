@@ -1,4 +1,4 @@
-use std::{collections::LinkedList, fs::File, io::{BufReader, BufWriter, Read, Write}, path::PathBuf};
+use std::{collections::LinkedList, fs::File, io::{BufReader, BufWriter, Read, Seek, Write}, path::PathBuf};
 use dialoguer::{Confirm, Editor};
 use move_to_front::{move_to_front_decode_r_w, move_to_front_rw};
 use clap::{Parser, arg};
@@ -174,12 +174,19 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
     }
     match config.mode{
         Mode::Encode => {
-            let mut working_temp_file = tempfile::tempfile()?;
-            let mut working_buffer =  BufWriter::new(working_temp_file);
+            let (working_mtf, working_bwt) = {
+                match (config.mtf, config.bwt){
+                    (true, true) => (Some(tempfile::tempfile()?), Some(tempfile::tempfile()?)),
+                    (true, false) => (Some(tempfile::tempfile()?), None),
+                    (false, true) => (None, Some(tempfile::tempfile()?)),
+                    (false, false) => (None, None),
+                }
+            };
+            let mut working_buffer;
             // let mut working_space = vec![];
             // let mut input_buffer = vec![];
             if config.bwt{
-                // println!("SIZE: {}", input_buffer.len());
+                working_buffer = BufWriter::new(working_bwt.unwrap());
                 let mut buff = [0; 8];
                 // let mut cursor = std::io::Cursor::new(&input_buffer);
                 while let Ok(size) = input_buf.read(&mut buff) && size > 0{
@@ -192,18 +199,21 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
                     // working_space.append(&mut res);
                 }
                 working_buffer.flush()?;
-                input_buf = BufReader::new(working_buffer.into_inner()?);
+                let mut iner = working_buffer.into_inner()?;
+                iner.seek(std::io::SeekFrom::Start(0))?;
+                input_buf = BufReader::new(iner);
             }
             // println!("size of space: {}", working_space.len());
             if config.mtf{
-                working_temp_file = tempfile::tempfile()?;
-                working_buffer =  BufWriter::new(working_temp_file);
+                working_buffer = BufWriter::new(working_mtf.unwrap());
                 let alph = (0..=u8::MAX).collect::<Vec<u8>>();
                 let mut alphabet = LinkedList::new();
                 alphabet.extend(&alph);
                 move_to_front_rw(&mut alphabet, &mut input_buf, &mut working_buffer)?;
                 working_buffer.flush()?;
-                input_buf = BufReader::new(working_buffer.into_inner()?);
+                let mut iner = working_buffer.into_inner()?;
+                iner.seek(std::io::SeekFrom::Start(0))?;
+                input_buf = BufReader::new(iner);
             }
             // println!("size of space: {}", working_space.len());
             // println!("Output starts at: {:?}", output.stream_position());

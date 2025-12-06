@@ -1,12 +1,12 @@
 #!/bin/zsh
 cargo build --release
+./encode_files_in_folder.zsh "txt"
+echo "txt done"
 ./encode_files_in_folder.zsh "epub"
 echo "epub done"
 ./encode_files_in_folder.zsh "executable"
 echo "executable done"
 ./encode_files_in_folder.zsh "pages"
 echo "pages done"
-./encode_files_in_folder.zsh "txt"
-echo "txt done"
 ./encode_files_in_folder.zsh "pdf"
 echo "pdf done"
