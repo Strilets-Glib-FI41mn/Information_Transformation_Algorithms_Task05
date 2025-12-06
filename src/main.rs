@@ -108,7 +108,7 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
     let ver = 0;
 
     #[cfg(debug_assertions)]
-    println!("{:?}", config);
+    println!("Input config {:?}", config);
     let input_path = config.input_file.clone();
 
     let output_path = match find_output_path(config){
@@ -138,6 +138,7 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
         },
         Mode::Decode => {
             let mut version = [0];
+            // input.read_exact(&mut version)?;
             input_buf.read_exact(&mut version)?;
             // let read_v = input.read(&mut version)?;
             // println!("read_v: {read_v}");
@@ -145,6 +146,7 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
                 panic!("Version {} is unsuported", version[0]);
             }
             let mut header_pt2 = [0,0,0];
+            // input.read_exact(&mut header_pt2)?;
             input_buf.read_exact(&mut header_pt2)?;
             config.encoding = header_pt2[0].try_into().unwrap();
             config.bwt = match header_pt2[1]{
@@ -159,6 +161,7 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
             };
             if config.encoding != Encoding::Huffman{
                 let mut small = vec![0];
+                // input.read_exact(&mut small)?;
                 input_buf.read_exact(&mut small)?;
                 config.filled_behaviour = match small[0] {
                     0 =>{
@@ -172,6 +175,8 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
             }
         },
     }
+    #[cfg(debug_assertions)]
+    println!("Updated config {:?}", config);
     match config.mode{
         Mode::Encode => {
             let (working_mtf, working_bwt) = {
@@ -242,8 +247,7 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
                     // output.write(&encoded)?;
                 },
                 Encoding::Huffman => {
-                    // println!("{:?}",input_buf.seek(std::io::SeekFrom::Current(0)));
-                    // huffman_encoding::encoder::encode_with_padding(&mut input_buf, &mut ouptut_buff)?;
+                    // huffman_encoding::encoder::encode(&mut input_buf, &mut ouptut_buff, true);
                     huffman_encoding::encoder::encode_with_padding(&mut input_buf, &mut ouptut_buff)?;
                 },
             }
@@ -283,13 +287,16 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
                     decoder.decode(&mut working_buffer)?;
                 },
                 Encoding::Huffman => {
-                    // println!("Huffman decoding starts at: {:?}",input_buf.stream_position());
+                    // let start = input_buf.seek(std::io::SeekFrom::Current(0))?;
+                    // println!("hf dec started: {start}");
                     huffman_encoding::decoder::decode_with_padding(input_buf, &mut working_buffer)?;
                 },
             }
             working_buffer.flush()?;
             if config.mtf{
-                input_buf = BufReader::new(working_buffer.into_inner()?);
+                let mut int_file = working_buffer.into_inner()?;
+                int_file.seek(std::io::SeekFrom::Start(0))?;
+                input_buf = BufReader::new(int_file);
                 // println!("MTF!");
                 working_buffer =  BufWriter::new(working_mtf.unwrap());
                 let alph = (0..=u8::MAX).collect::<Vec<u8>>();
@@ -300,7 +307,9 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
                 working_buffer.flush()?;
             }
             if config.bwt{
-                input_buf = BufReader::new(working_buffer.into_inner()?);
+                let mut int_file = working_buffer.into_inner()?;
+                int_file.seek(std::io::SeekFrom::Start(0))?;
+                input_buf = BufReader::new(int_file);
                 working_buffer =  BufWriter::new(working_bwt.unwrap());
                 // let mut decoded = vec![];
                 let mut buff = [0; 9];
@@ -418,8 +427,9 @@ pub struct Config {
 #[cfg(test)]
 mod tests {
     use burrows_wheeler_transform::*;
+    use tempfile::tempfile;
     use zwl_gs::{like_u12, like_u16};
-    use std::{collections::LinkedList, io::Read};
+    use std::{collections::LinkedList, io::{BufWriter, Read, Seek, Write}};
     const PREAMBLE: &str =  "The Project Gutenberg eBook of The Ethics of Aristotle
     
 This ebook is for the use of anyone anywhere in the United States and
@@ -441,6 +451,27 @@ before using this eBook...";
         let cursor = std::io::Cursor::new(&he_text);
         let mut he_dec = vec![];
         huffman_encoding::decoder::decode_with_padding(cursor, &mut he_dec)?;
+        
+        println!("{:?}", str::from_utf8(&he_dec));
+        // assert_eq!(str::from_utf8(&he_dec), Ok(&text).map(|x| x.as_str()));
+        assert_eq!(original_vu8, he_dec);
+        Ok(())
+    }
+    #[test]
+    fn huffman_text_tempfile() -> std::io::Result<()>{
+        
+        let original_vu8 = PREAMBLE.as_bytes();
+        println!("{}", original_vu8.len());
+        let tmp = tempfile()?;
+        let cursor = std::io::Cursor::new(original_vu8);
+        let mut wr = BufWriter::new(tmp);
+        huffman_encoding::encoder::encode_with_padding(cursor, &mut wr)?;
+        wr.flush()?;
+        let mut inner = wr.into_inner()?;
+        inner.seek(std::io::SeekFrom::Start(0))?;
+        let rd = std::io::BufReader::new(inner);
+        let mut he_dec = vec![];
+        huffman_encoding::decoder::decode_with_padding(rd, &mut he_dec)?;
         
         println!("{:?}", str::from_utf8(&he_dec));
         // assert_eq!(str::from_utf8(&he_dec), Ok(&text).map(|x| x.as_str()));

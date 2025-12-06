@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 burrows_wheeler_transform = {path = "burrows_wheeler_transform"}
 move_to_front = {path = "move_to_front"}
-huffman_encoding = {git = "https://github.com/Strilets-Glib-FI41mn/Information_Transformation_Algorithms_Task03", tag = "0.5.3"}
+huffman_encoding = {git = "https://github.com/Strilets-Glib-FI41mn/Information_Transformation_Algorithms_Task03", tag = "0.6.1"}
 zwl_gs = {git = "https://github.com/Strilets-Glib-FI41mn/Information_Transformation_Algorithms_Task04", tag = "0.4.7"}
 
 
@@ -17,3 +17,5 @@ serde = { version = "1.0.226", features = ["derive"] }
 rayon = "1.11.0"
 
 tempfile = "3.23.0"
+[features]
+huffman_debug = ["huffman_encoding/draw"]
