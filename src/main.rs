@@ -1,7 +1,6 @@
 use std::{collections::LinkedList, fs::File, io::{BufReader, BufWriter, Read, Seek, Write}, path::PathBuf};
 use dialoguer::{Confirm, Editor};
 use move_to_front::{move_to_front_decode_r_w, move_to_front_rw};
-use burrows_wheeler_transform;
 use clap::{Parser, arg};
 use serde::Serialize;
 use rayon::prelude::*;
@@ -112,7 +111,7 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
     println!("{:?}", config);
     let input_path = config.input_file.clone();
 
-    let output_path = match find_output_path(&config){
+    let output_path = match find_output_path(config){
         Some(output) => output,
         None => {
             println!("No name for the output file found! Exiting");
@@ -129,7 +128,7 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
             header.push((&config.encoding).into());
             header.push(config.bwt.into());
             header.push(config.mtf.into());
-            if &config.encoding != &Encoding::Huffman{
+            if config.encoding != Encoding::Huffman{
                 match config.filled_behaviour{
                     FilledOption::Clear => header.push(0),
                     FilledOption::Freeze => header.push(1),
@@ -158,7 +157,7 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
                 1 => true,
                 _ => panic!("Bad header!")
             };
-            if &config.encoding != &Encoding::Huffman{
+            if config.encoding != Encoding::Huffman{
                 let mut small = vec![0];
                 input_buf.read_exact(&mut small)?;
                 config.filled_behaviour = match small[0] {
@@ -199,7 +198,7 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
             if config.mtf{
                 working_temp_file = tempfile::tempfile()?;
                 working_buffer =  BufWriter::new(working_temp_file);
-                let alph = (0..=u8::MAX).map(|byte| byte).collect::<Vec<u8>>();
+                let alph = (0..=u8::MAX).collect::<Vec<u8>>();
                 let mut alphabet = LinkedList::new();
                 alphabet.extend(&alph);
                 move_to_front_rw(&mut alphabet, &mut input_buf, &mut working_buffer)?;
@@ -207,7 +206,7 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
                 input_buf = BufReader::new(working_buffer.into_inner()?);
             }
             // println!("size of space: {}", working_space.len());
-            println!("Output starts at: {:?}", output.seek(std::io::SeekFrom::Current(0)));
+            println!("Output starts at: {:?}", output.stream_position());
             let mut ouptut_buff = BufWriter::new(output);
             match config.encoding{
                 Encoding::ZWLU12 => {
@@ -261,7 +260,7 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
                     decoder.decode(&mut working_buffer)?;
                 },
                 Encoding::ZWLU16 => {
-                    println!("ZWLU16 decoding starts at: {:?}",input_buf.seek(std::io::SeekFrom::Current(0)));
+                    println!("ZWLU16 decoding starts at: {:?}",input_buf.stream_position());
                     let mut decoder = zwl_gs::bit_decoder::ZwlBitDecoder::<zwl_gs::like_u16::LikeU16, _>::new(input_buf, config.filled_behaviour.clone().into());
                     decoder.decode(&mut working_buffer)?;
                 },
@@ -274,7 +273,7 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
                     decoder.decode(&mut working_buffer)?;
                 },
                 Encoding::Huffman => {
-                    println!("Huffman decoding starts at: {:?}",input_buf.seek(std::io::SeekFrom::Current(0)));
+                    println!("Huffman decoding starts at: {:?}",input_buf.stream_position());
                     huffman_encoding::decoder::decode_with_padding(input_buf, &mut working_buffer)?;
                 },
             }
@@ -283,7 +282,7 @@ pub fn encode_or_decode(config: &mut Config) -> std::io::Result<()>{
                 input_buf = BufReader::new(working_buffer.into_inner()?);
                 // println!("MTF!");
                 working_buffer =  BufWriter::new(working_mtf.unwrap());
-                let alph = (0..=u8::MAX).map(|byte| byte).collect::<Vec<u8>>();
+                let alph = (0..=u8::MAX).collect::<Vec<u8>>();
                 let mut alphabet = LinkedList::new();
                 alphabet.extend(&alph);
                 // let the_rest: Vec<_> = working_space.iter().map(|u| *u as usize).collect();
@@ -345,14 +344,14 @@ impl TryFrom<u8> for Encoding{
         }
     }
 }
-impl Into<u8> for &Encoding{
-    fn into(self) -> u8 {
-        match self{
-            &Encoding::ZWLU12 => 0,
-            &Encoding::ZWLU16 => 1,
-            &Encoding::ZWLU32 => 2,
-            &Encoding::ZWLU64 => 3,
-            &Encoding::Huffman => 4,
+impl From<&Encoding> for u8{
+    fn from(val: &Encoding) -> Self {
+        match *val{
+            Encoding::ZWLU12 => 0,
+            Encoding::ZWLU16 => 1,
+            Encoding::ZWLU32 => 2,
+            Encoding::ZWLU64 => 3,
+            Encoding::Huffman => 4,
         }
     }
 }
