@@ -1,7 +1,7 @@
 #!/bin/zsh
 cargo build --release
 ./encode_files_in_folder.zsh "txt"
-echo "txt done"
+echo "txt done" txt is almost done
 ./encode_files_in_folder.zsh "epub"
 echo "epub done"
 ./encode_files_in_folder.zsh "executable"

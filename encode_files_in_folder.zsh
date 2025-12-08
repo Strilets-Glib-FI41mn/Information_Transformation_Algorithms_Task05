@@ -40,25 +40,21 @@ target/release/Information_Transformation_Algorithms_Task05 tested/$1 tested/$1/
 wait
 echo "zwl16 done"
 
-target/release/Information_Transformation_Algorithms_Task05 tested/$1 tested/$1/zwlu32/00 -e zwlu32 -o
-sleep 1
-target/release/Information_Transformation_Algorithms_Task05 tested/$1 tested/$1/zwlu32/bwt -e zwlu32 --bwt -o
-sleep 1
+# echo "zwl32 0/4"
+# target/release/Information_Transformation_Algorithms_Task05 tested/$1 tested/$1/zwlu32/00 -e zwlu32 -o
+# echo "zwl32 1/4"
+# target/release/Information_Transformation_Algorithms_Task05 tested/$1 tested/$1/zwlu32/bwt -e zwlu32 --bwt -o
+# echo "zwl32 2/4"
+# target/release/Information_Transformation_Algorithms_Task05 tested/$1 tested/$1/zwlu32/mtf -e zwlu32 --mtf -o
+# echo "zwl32 3/4"
+# target/release/Information_Transformation_Algorithms_Task05 tested/$1 tested/$1/zwlu32/11 -e zwlu32 --bwt --mtf -o
+# echo "zwl32 done"
 
-target/release/Information_Transformation_Algorithms_Task05 tested/$1 tested/$1/zwlu32/mtf -e zwlu32 --mtf -o
-sleep 1
-target/release/Information_Transformation_Algorithms_Task05 tested/$1 tested/$1/zwlu32/11 -e zwlu32 --bwt --mtf -o
-sleep 1
-
-echo "zwl32 done"
-
-target/release/Information_Transformation_Algorithms_Task05 tested/$1 tested/$1/zwlu32/00 -e zwlu64 -o
-sleep 1
-target/release/Information_Transformation_Algorithms_Task05 tested/$1 tested/$1/zwlu32/bwt -e zwlu64 --bwt -o
-sleep 1
-
-target/release/Information_Transformation_Algorithms_Task05 tested/$1 tested/$1/zwlu32/mtf -e zwlu64 --mtf -o
-sleep 1
-target/release/Information_Transformation_Algorithms_Task05 tested/$1 tested/$1/zwlu32/11 -e zwlu64 --bwt --mtf -o
-
-echo "zwl64 done"
+# target/release/Information_Transformation_Algorithms_Task05 tested/$1 tested/$1/zwlu64/00 -e zwlu64 -o
+# echo "zwl64 1/4"
+# target/release/Information_Transformation_Algorithms_Task05 tested/$1 tested/$1/zwlu64/bwt -e zwlu64 --bwt -o 
+# echo "zwl64 2/4"
+# target/release/Information_Transformation_Algorithms_Task05 tested/$1 tested/$1/zwlu64/mtf -e zwlu64 --mtf -o
+# echo "zwl64 3/4"
+# target/release/Information_Transformation_Algorithms_Task05 tested/$1 tested/$1/zwlu64/11 -e zwlu64 --bwt --mtf -o
+# echo "zwl64 done"
