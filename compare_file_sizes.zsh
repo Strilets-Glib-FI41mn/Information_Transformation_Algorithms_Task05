@@ -19,7 +19,7 @@ for file in "$folder1"/*; do
                 compression=$(echo "scale=4; $size1 / $size2" | bc)
 
                 # Validate if the calculated compression is a number
-                if [[ $compression =~ ^[0-9.]+(\.[0-9]+)?$ ]]; then
+                if [[ $compression =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
                     total_ratio=$(echo "$total_ratio + $compression" | bc)
                     compression_ratios+=("$compression")
                     ((count++))
